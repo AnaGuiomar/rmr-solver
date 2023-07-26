@@ -18,27 +18,28 @@ cd(pathstr);
 
 % getting path to other folders in this repo
 addpath(pathstr)
-cd ..\..\..\
+cd ../../../
 path_to_repo = pwd;
+path_to_opensim = ('/Users/guiomarsantoscarvalho/OpenSim/Thesis/SLADL008'); %Added this path to get to the Model files that are saved locally
 addpath(path_to_repo)
-addpath(fullfile(path_to_repo, 'Code\Data Processing\'))
+addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 % where you have the experimental files (.trc)
-trc_path = fullfile(path_to_repo, 'ExperimentalData\Markers');
+trc_path = fullfile(path_to_opensim, 'TRC_files');
 
 % where to save the results
 saving_path = fullfile(path_to_repo, 'Personal_Results');
 
 
 % Select model
-modelFile_0kg = append(path_to_repo, '\OpenSim Models\for RMR solver\TSM_subject_noWeight.osim');
+modelFile_0kg = append(path_to_opensim, '/ThoracoscapularShoulderModel_Guiomar_scaled.osim');
 model_0kg = Model(modelFile_0kg);
 
-modelFile_2kg = append(path_to_repo, '\OpenSim Models\for RMR solver\TSM_subject_2kgWeight.osim');
-model_2kg = Model(modelFile_2kg);
+% modelFile_2kg = append(path_to_repo, '\OpenSim Models\for RMR solver\TSM_subject_2kgWeight.osim');
+% model_2kg = Model(modelFile_2kg);
 
 % Select the experimental data to be considered
-dataset_considered = 'Seth2019';
+dataset_considered = 'SLADL008';
 
 [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
 
@@ -64,23 +65,24 @@ time_interval = 1;
 dynamic_bounds = true;              % enforcing continuity of the activations from one timestep to the next, to respect first-order dynamics
 enforce_GH_constraint = true;       % enforcing directional constraint on the glenohumeral joint force
 
+apply_external_force = 1; % 1 = apply
 %% Generate the external force and add it to the model
 force_params =[];
-force_params.apply_external_force = apply_external_force;
+force_params.apply_external_force =apply_external_force; 
 if apply_external_force
-    external_force_point_of_application = 'elbow';  % also "thorax" is supported. Here you should input an identifier
+    %external_force_point_of_application = 'hand';  % also "thorax" is supported. Here you should input an identifier
                                                     % for the point on which you want to apply the force on. Then, it
                                                     % will be decoded inside the "generate_external_force_3D.m" function
                                                     % so you will have to modify it too
 
-    external_force_filename = 'TSM_EF';             % name of the filename in which the force is going to be stored
-    
+    external_force_filename = append(path_to_opensim, '/External_loads/Treadmill_ExternalForces.xml');             % name of the filename in which the force is going to be stored
+    external_force_storagefile = append(path_to_opensim, '/External_loads/Treadmill_hand.sto');
     % 3D components of the force (fictitious for now, you can subsitute
     % this with experimental data)
     % Values are in Newton 
-    external_force_value.x = [0, -5, -10, -20, -40];
-    external_force_value.y = [0];
-    external_force_value.z = [0];
+%     external_force_value.x = [0, -5, -10, -20, -40];
+%     external_force_value.y = [0];
+%     external_force_value.z = [0];
     
     % You can also built a force profile as continuous force curve
     % (here this is exemplified along the X direction of the force
@@ -95,9 +97,10 @@ if apply_external_force
 %     plot(xx, external_force.x);
     
     % Save external force parameters in structure
-    force_params.EF_point_of_application = external_force_point_of_application;
+    %force_params.EF_point_of_application = external_force_point_of_application;
     force_params.EF_filename = external_force_filename;
-    force_params.EF = external_force_value;
+    force_params.EF_storage_file = external_force_storagefile;
+    %force_params.EF = external_force_value;
 end
 
 %% Run Rapid Muscle Redundancy (RMR) solver

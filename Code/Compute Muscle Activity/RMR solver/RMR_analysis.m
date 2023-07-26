@@ -72,13 +72,14 @@ cd(pathstr);
 
 % getting path to other folders in this repo
 addpath(pathstr)
-cd ..\..\..\
+cd ../../../
 path_to_repo = pwd;
+path_to_opensim = ('/Users/guiomarsantoscarvalho/OpenSim/Thesis'); %Added this path to get to the Model files that are saved locally
 addpath(path_to_repo)
-addpath(fullfile(path_to_repo, 'Code\Data Processing\'))
+addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 % cd to Personal Results to have all the results saved there
-cd([path_to_repo, '\Personal_Results']);
+cd([path_to_repo, '/Personal_Results']);
 
 % create a temporary copy of the model, to be used in the function. In this
 % way, the model can be modified freely here without interfering with its
@@ -124,14 +125,14 @@ if trc_file
     % perform IK on the basis of marker data to retrieve the motion file for
     % the coordinates of the model
     
-    motion_file_name = append(experiment_name, '.mot');
+    motion_file_name = append('IK_', experiment_name, '.mot');
     
-    ikSetupFile = [path_to_repo,'' ...
-            '\ExperimentalData\IK setup files\IKSetup_2019.xml'];
+    ikSetupFile = [path_to_opensim,'' ...
+            '/IK/IK_Setup_Treadmill.xml'];
     
     ikTool = InverseKinematicsTool(ikSetupFile);
     ikTool.setMarkerDataFileName(trc_file);
-    ikTool.setOutputMotionFileName([path_to_repo, '\Personal_Results\', motion_file_name]);
+    ikTool.setOutputMotionFileName([path_to_repo, '/Personal_Results/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
     ikTool.setStartTime(start_time);
     ikTool.setEndTime(end_time);
@@ -233,66 +234,67 @@ end
 if force_params.apply_external_force
     % this part requires to be rewritten to account for the custom external
     % force that the user wants to apply
-    samples_EF = 0
-    point_of_application = force_params.EF_point_of_application;
+%     samples_EF = 0
+%     point_of_application = force_params.EF_point_of_application;
     file_name = force_params.EF_filename;
+    storage_file = force_params.EF_storage_file;
 
-    % TODO: add here the identifier that you are willing to use, and specify
-    % the body and the location in which the force is applied
-    if strcmp(point_of_application, 'your_identifier')
-        body = 'hand';                    % for a pushing task (like wheelchair) probably the force should be applied at the hand
-        marker_location = [0.0 0.0 0.0];  % To be modified with the correct position of the marker in the body frame                                   
-    end
-
-    % create the storage file in which the force value are saved
-    storage_file = append(force_params.EF_filename, '.mot');
-
-    % here we are setting the moments to be all 0. In case this is not the
-    % case, they should be set here too (last 3 columns of the matrix)
-    force_moments_matrix = zeros(samples_EF, 6);
-
-    force_moments_matrix(1:numel(force_vector_x),1) = force_vector_x;       % force along x axis    
-    force_moments_matrix(1:numel(force_vector_y),2) = force_vector_y;       % force along y axis
-    force_moments_matrix(1:numel(force_vector_z),3) = force_vector_z;       % force along z axis
-
-    % The marker position is kept fixed, as it is defined in the body frame
-    force_point = repmat(marker_location, [samples_EF,1]);
-    
-    data = [time, force_moments_matrix, force_point];
-    
-    % create  the motion file to be used in the ExternalLoads .xml file
-    columnNames = ["F_x" "F_y" "F_z" "M_x" "M_y" "M_z" "p_x" "p_y" "p_z"];
-    
-    writeMotStoData(data, 1, columnNames, file_name);
-    
-    mot_file_name = append(file_name, '.mot');
-    
-    % creating storage object
-    force_storage = Storage(mot_file_name, false);
-    force_storage.setName(mot_file_name(1:end-4));
-    force_storage.print(mot_file_name);
-    
-    % Create external force object
+%     % TODO: add here the identifier that you are willing to use, and specify
+%     % the body and the location in which the force is applied
+%     if strcmp(point_of_application, 'your_identifier')
+%         body = 'hand';                    % for a pushing task (like wheelchair) probably the force should be applied at the hand
+%         marker_location = [0.0 0.0 0.0];  % To be modified with the correct position of the marker in the body frame                                   
+%     end
+% 
+%     % create the storage file in which the force value are saved
+%     storage_file = append(force_params.EF_filename, '.mot');
+% 
+%     % here we are setting the moments to be all 0. In case this is not the
+%     % case, they should be set here too (last 3 columns of the matrix)
+%     force_moments_matrix = zeros(samples_EF, 6);
+% 
+%     force_moments_matrix(1:numel(force_vector_x),1) = force_vector_x;       % force along x axis    
+%     force_moments_matrix(1:numel(force_vector_y),2) = force_vector_y;       % force along y axis
+%     force_moments_matrix(1:numel(force_vector_z),3) = force_vector_z;       % force along z axis
+% 
+%     % The marker position is kept fixed, as it is defined in the body frame
+%     force_point = repmat(marker_location, [samples_EF,1]);
+%     
+%     data = [time, force_moments_matrix, force_point];
+%     
+%     % create  the motion file to be used in the ExternalLoads .xml file
+%     columnNames = ["F_x" "F_y" "F_z" "M_x" "M_y" "M_z" "p_x" "p_y" "p_z"];
+%     
+%     writeMotStoData(data, 1, columnNames, file_name);
+%     
+%     mot_file_name = append(file_name, '.mot');
+%     
+%     % creating storage object
+    force_storage = Storage(storage_file, false);
+%     force_storage.setName(mot_file_name(1:end-4));
+%     force_storage.print(mot_file_name);
+%     
+%     % Create external force object
     external_force = ExternalForce();
-    external_force.setName('Force');
-    external_force.set_applied_to_body(body);
+    external_force.setName('ExternalForce');
+    external_force.set_applied_to_body('hand');
     external_force.set_force_expressed_in_body("ground");       % TODO: here it depends from the coordinate frame in which the force is expressed
-    external_force.set_point_expressed_in_body(body);
-    external_force.set_force_identifier('F_');
-    external_force.set_point_identifier('p_');
-    external_force.set_torque_identifier('M_');
-    external_force.set_data_source_name(mot_file_name);         % this line and the next "link" the storage file to the external force
+    external_force.set_point_expressed_in_body('ground');
+    external_force.set_force_identifier('ground_force_v');
+    external_force.set_point_identifier('ground_force_p');
+%     external_force.set_torque_identifier('M_');
+    external_force.set_data_source_name('Treadmill_hand');         % this line and the next "link" the storage file to the external force
     external_force.setDataSource(force_storage);    
-    
-    xml_file_name = append(file_name, '.xml');
+%     
+    xml_file_name = append(file_name);
     external_force.print(xml_file_name);                        % print the xml file where the ExternalForce is defined
 
     % add the force to the model (it is added as the last element of the
     % force set)
-    model.addForce(external_force);
+    model_temp.addForce(external_force); % changed from model to model_temp
     
     % ensure that the force is correctly integrated in teh model
-    model.finalizeConnections();
+    model_temp.finalizeConnections();
 end
 
 % Update the system to include any muscle modeling changes
@@ -345,7 +347,7 @@ x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles)]; %, epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -438,7 +440,7 @@ for time_instant = 1:numTimePoints
     params.state = state;    
     params.AMuscForce = AMuscForce;
     params.PMuscForce = PMuscForce;
-    params.coords = coords;
+    params.coords = coords; % G: this is empty.. should it be empty?
     params.coordNames = coordNames;
     params.acts = acts;
     params.muscles = muscles;
