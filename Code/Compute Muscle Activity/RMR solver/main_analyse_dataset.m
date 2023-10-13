@@ -20,26 +20,28 @@ cd(pathstr);
 addpath(pathstr)
 cd ../../../
 path_to_repo = pwd;
-path_to_opensim = ('/Users/guiomarsantoscarvalho/OpenSim/Thesis/SLADL008'); %Added this path to get to the Model files that are saved locally
 addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
+%path to OpenSim folder
+path_to_opensim = '/Users/guiomarsantoscarvalho/OpenSim/Thesis/UEFS25/';
+
 % where you have the experimental files (.trc)
-trc_path = fullfile(path_to_opensim, 'TRC_files');
+trc_path = fullfile(path_to_opensim, 'TRC');
 
 % where to save the results
-saving_path = fullfile(path_to_repo, 'Personal_Results');
+saving_path = fullfile(path_to_opensim, 'RMR');
 
 
 % Select model
-modelFile_0kg = append(path_to_opensim, '/ThoracoscapularShoulderModel_Guiomar_scaled.osim');
+modelFile_0kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
 model_0kg = Model(modelFile_0kg);
 
-% modelFile_2kg = append(path_to_repo, '\OpenSim Models\for RMR solver\TSM_subject_2kgWeight.osim');
-% model_2kg = Model(modelFile_2kg);
+modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
+model_2kg = Model(modelFile_0kg);
 
 % Select the experimental data to be considered
-dataset_considered = 'SLADL008';
+dataset_considered = 'Treadmill';
 
 [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
 
@@ -75,8 +77,8 @@ if apply_external_force
                                                     % will be decoded inside the "generate_external_force_3D.m" function
                                                     % so you will have to modify it too
 
-    external_force_filename = append(path_to_opensim, '/External_loads/Treadmill_ExternalForces.xml');             % name of the filename in which the force is going to be stored
-    external_force_storagefile = append(path_to_opensim, '/External_loads/Treadmill_hand.sto');
+    external_force_filename = append(path_to_opensim, '/ExternalLoads/Treadmill_ExternalForces_45W.xml');             % name of the filename in which the force is going to be stored
+    external_force_storagefile = append(path_to_opensim, '/ExternalLoads/UEFS25_ExpTrial_2_4kmh_45W_ExternalForce.sto');
     % 3D components of the force (fictitious for now, you can subsitute
     % this with experimental data)
     % Values are in Newton 

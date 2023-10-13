@@ -74,17 +74,19 @@ cd(pathstr);
 addpath(pathstr)
 cd ../../../
 path_to_repo = pwd;
-path_to_opensim = ('/Users/guiomarsantoscarvalho/OpenSim/Thesis'); %Added this path to get to the Model files that are saved locally
 addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
+%path to OpenSim folder
+path_to_opensim = '/Users/guiomarsantoscarvalho/OpenSim/Thesis/UEFS25/';
+
 % cd to Personal Results to have all the results saved there
-cd([path_to_repo, '/Personal_Results']);
+cd([path_to_opensim, 'RMR']);
 
 % create a temporary copy of the model, to be used in the function. In this
 % way, the model can be modified freely here without interfering with its
 % state/properties outside this function
-model_temp = model_original.clone();    
+model_temp = model_original.clone();      
 
 %% Getting quantities about GlenoHumeral joint
 % get the glenohumeral joint
@@ -128,11 +130,11 @@ if trc_file
     motion_file_name = append('IK_', experiment_name, '.mot');
     
     ikSetupFile = [path_to_opensim,'' ...
-            '/IK/IK_Setup_Treadmill.xml'];
+            'IK/IK_Setup_Treadmill.xml'];
     
     ikTool = InverseKinematicsTool(ikSetupFile);
     ikTool.setMarkerDataFileName(trc_file);
-    ikTool.setOutputMotionFileName([path_to_repo, '/Personal_Results/', motion_file_name]);
+    ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
     ikTool.setStartTime(start_time);
     ikTool.setEndTime(end_time);
