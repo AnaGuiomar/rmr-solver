@@ -285,7 +285,7 @@ if force_params.apply_external_force
     external_force.set_force_identifier('ground_force_v');
     external_force.set_point_identifier('ground_force_p');
 %     external_force.set_torque_identifier('M_');
-    external_force.set_data_source_name('Treadmill_hand');         % this line and the next "link" the storage file to the external force
+    external_force.set_data_source_name('UEFS25_ExpTrial_2_4kmh_45W_ExternalForce');         % CHANGE WITH NEW SUBJECT OR TASK! this line and the next "link" the storage file to the external force
     external_force.setDataSource(force_storage);    
 %     
     xml_file_name = append(file_name);
