@@ -130,7 +130,7 @@ if trc_file
     motion_file_name = append('IK_', experiment_name, '.mot');
     
     ikSetupFile = [path_to_opensim,'' ...
-            'IK/IK_Setup_Treadmill.xml'];
+            'IK/IK_Setup_Trial2_45W.xml'];
     
     ikTool = InverseKinematicsTool(ikSetupFile);
     ikTool.setMarkerDataFileName(trc_file);
@@ -349,7 +349,7 @@ x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)];%[ones(1,numMuscles)]; %, epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)]; %[ones(1,numMuscles)]; %, epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -419,6 +419,7 @@ for time_instant = 1:numTimePoints
 
     % Populate the muscle multiplier arrays. To do this, we must have realized 
     % the system to the velocity stage
+    %get velocity in this loop
     for index_muscle = 1:numMuscles
         fl(index_muscle) = muscles_downcasted{index_muscle}.getActiveForceLengthMultiplier(state);            
         fv(index_muscle) = muscles_downcasted{index_muscle}.getForceVelocityMultiplier(state);
@@ -563,6 +564,30 @@ end
 
 tOptim = toc;
 
+%% SAVING THE RESULTS TO FILE (before plotting)
+name_file = append('muscle_activations_', subject_considered, '_', experiment_name);
+
+muscleNames = ArrayStr();
+muscles.getNames(muscleNames);
+
+muscle_order = "";
+for i = 1:numMuscles
+    muscle_order= [muscle_order, string(muscleNames.get(i-1).toCharArray')];
+end
+
+for i=1:length(coordNames)
+    muscle_order= [muscle_order, string(coordNames{i})];
+end
+
+muscle_order = muscle_order(2:end);
+
+% rescale the frequency of the solution knowing the freq of the data
+frequency_solution = frequency_trc_data/time_interval;
+
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim');
+
+file_results = append(saving_path,'\', name_file, '.mat');
+
 %% Plot results
 % According to the value of the 'print_flag'
 if print_flag
@@ -683,27 +708,3 @@ if print_flag
     name_fig6 = append(experiment_name, '_CoPGH.png');
     saveas(f6, name_fig6)
 end
-
-%% SAVING THE RESULTS TO FILE
-name_file = append('muscle_activations_', subject_considered, '_', experiment_name);
-
-muscleNames = ArrayStr();
-muscles.getNames(muscleNames);
-
-muscle_order = "";
-for i = 1:numMuscles
-    muscle_order= [muscle_order, string(muscleNames.get(i-1).toCharArray')];
-end
-
-for i=1:length(coordNames)
-    muscle_order= [muscle_order, string(coordNames{i})];
-end
-
-muscle_order = muscle_order(2:end);
-
-% rescale the frequency of the solution knowing the freq of the data
-frequency_solution = frequency_trc_data/time_interval;
-
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim');
-
-file_results = append(saving_path,'\', name_file, '.mat');

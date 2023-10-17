@@ -34,14 +34,14 @@ saving_path = fullfile(path_to_opensim, 'RMR');
 
 
 % Select model
-modelFile_0kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
+modelFile_0kg = append(path_to_opensim, 'TSM_UEFS25_scaled_adjusted_corrected_markers.osim');
 model_0kg = Model(modelFile_0kg);
 
-modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
+modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled_adjusted_corrected_markers.osim');
 model_2kg = Model(modelFile_0kg);
 
 % Select the experimental data to be considered
-dataset_considered = 'Treadmill';
+dataset_considered = 'Trial2_45W';
 
 [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
 
