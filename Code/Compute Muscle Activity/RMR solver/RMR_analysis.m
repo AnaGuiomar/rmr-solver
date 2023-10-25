@@ -565,7 +565,7 @@ end
 tOptim = toc;
 
 %% SAVING THE RESULTS TO FILE (before plotting)
-name_file = append('muscle_activations_', subject_considered, '_', experiment_name);
+name_file = append('muscle_activations_', experiment_name);
 
 muscleNames = ArrayStr();
 muscles.getNames(muscleNames);
@@ -589,7 +589,7 @@ save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatu
 file_results = append(saving_path,'\', name_file, '.mat');
 
 %% Plot results
-% According to the value of the 'print_flag'
+%According to the value of the 'print_flag'
 if print_flag
     % plot muscle activations
     f1 = figure;
@@ -610,22 +610,23 @@ if print_flag
     f1.WindowState = 'maximized';
     name_fig1 = append(experiment_name, '_MuscleActivations.png');
     saveas(f1, name_fig1)
-    
-    % Plot reserve actuator excitations.
-    f2 = figure;
-    title("Reserve actuators")
-    side = ceil(sqrt(numCoordActs));
-    for i = 1:numCoordActs
-        subplot(side,side,i)
-        hold on
-        plot(pgc, xsol(:,numMuscles+i), 'linewidth', 2);
-        title(char(acts{numMuscles+i}));
-        hold off
-    end
-    legend("reserve act value")
-    f2.WindowState = 'maximized';
-    name_fig2 = append(experiment_name, '_ReserveActuators.png');
-    saveas(f2, name_fig2)
+
+
+    % % Plot reserve actuator excitations.
+    % f2 = figure;
+    % title("Reserve actuators")
+    % side = ceil(sqrt(numCoordActs));
+    % for i = 1:numCoordActs
+    %     subplot(side,side,i)
+    %     hold on
+    %     plot(pgc, xsol(:,numMuscles+i), 'linewidth', 2);
+    %     title(char(acts{numMuscles+i}));
+    %     hold off
+    % end
+    % legend("reserve act value")
+    % f2.WindowState = 'maximized';
+    % name_fig2 = append(experiment_name, '_ReserveActuators.png');
+    % saveas(f2, name_fig2)
 
     % plot accelerations
     f3 = figure;

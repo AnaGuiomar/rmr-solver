@@ -37,7 +37,7 @@ saving_path = fullfile(path_to_opensim, 'RMR');
 modelFile_0kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
 model_0kg = Model(modelFile_0kg);
 
-modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled_adjusted_corrected_markers.osim');
+modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
 model_2kg = Model(modelFile_0kg);
 
 % Select the experimental data to be considered
