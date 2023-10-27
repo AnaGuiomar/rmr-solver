@@ -34,11 +34,9 @@ saving_path = fullfile(path_to_opensim, 'RMR');
 
 
 % Select model
-modelFile_0kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
-model_0kg = Model(modelFile_0kg);
+modelFile = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
+model = Model(modelFile);
 
-modelFile_2kg = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
-model_2kg = Model(modelFile_0kg);
 
 % Select the experimental data to be considered
 dataset_considered = 'Trial2_45W';
@@ -68,6 +66,11 @@ dynamic_bounds = true;              % enforcing continuity of the activations fr
 enforce_GH_constraint = true;       % enforcing directional constraint on the glenohumeral joint force
 
 apply_external_force = 1; % 1 = apply
+
+%Check if 3 extra markers were added to the model (G_center,HH_center,G_edge)
+numMarkers = model.getNumMarkers();
+assert(numMarkers == 16, 'Add 3 markers:G_center,HH_center,G_edge');
+
 %% Generate the external force and add it to the model
 force_params =[];
 force_params.apply_external_force =apply_external_force; 
@@ -123,12 +126,8 @@ for trc_file_index=1:num_files
         has_2kg_weight = str2num(experiment(end-5));      % based on file name
     end
     
-    % consider the correct model in the analysis, based on the .trc files
-    if has_2kg_weight
-        [aux_optimization_status, aux_unfeasibility_flags, tOptim(trc_file_index), aux_result_file] = RMR_analysis(dataset_considered, model_2kg, experiment, 0, weight_coord, time_interval, dynamic_bounds, enforce_GH_constraint, force_params, saving_path);
-    else
-        [aux_optimization_status, aux_unfeasibility_flags, tOptim(trc_file_index), aux_result_file] = RMR_analysis(dataset_considered, model_0kg, experiment, 0, weight_coord, time_interval, dynamic_bounds, enforce_GH_constraint, force_params, saving_path);
-    end
+[aux_optimization_status, aux_unfeasibility_flags, tOptim(trc_file_index), aux_result_file] = RMR_analysis(dataset_considered, model, experiment, 0, weight_coord, time_interval, dynamic_bounds, enforce_GH_constraint, force_params, saving_path);
+
     optimizationStatus(trc_file_index).experiment = aux_optimization_status;
     result_file_RMR{trc_file_index} = aux_result_file;
     unfeasibility_flag(trc_file_index).experiment = aux_unfeasibility_flags;
