@@ -211,6 +211,7 @@ if print_flag
     grid on
     end
     legend("coords", "speeds", "accs")
+    close
 end
 
 %% Store max isometric force values and disable muscle dynamics
@@ -357,6 +358,7 @@ fl = zeros(1, numMuscles);
 fv = zeros(1, numMuscles);
 fp = zeros(1, numMuscles);
 cosPenn = zeros(1, numMuscles);
+MuscVelocity = zeros(1,numMuscles); %ADDED
 Fmax = zeros(1, numMuscles);
 A_eq_acc = zeros(numCoords,num_acts);
 A_eq_force = zeros(3, num_acts);
@@ -385,6 +387,10 @@ if strcmpi(experiment_name(1:5), 'shrug')
 end
 
 tic
+
+%allocate the
+AMuscForce = zeros(numMuscles,numTimePoints);
+PMuscForce = zeros(numMuscles,numTimePoints);
 
 % enter in the optimization loop
 for time_instant = 1:numTimePoints
@@ -425,6 +431,7 @@ for time_instant = 1:numTimePoints
         fv(index_muscle) = muscles_downcasted{index_muscle}.getForceVelocityMultiplier(state);
         fp(index_muscle) = muscles_downcasted{index_muscle}.getPassiveForceMultiplier(state);
         cosPenn(index_muscle) = muscles_downcasted{index_muscle}.getCosPennationAngle(state);
+        MuscVelocity(index_muscle) = muscles_downcasted{index_muscle}.getFiberVelocity(state);
     end 
 
     % get the vector Vec_H2GC between humeral head and the glenoid center
@@ -433,16 +440,16 @@ for time_instant = 1:numTimePoints
     
     % store the values of active and passive maximum force in the current
     % configuration
-    AMuscForce = (fl.*fv.*Fmax.*cosPenn)'; 
-    PMuscForce = (Fmax.*fp.*cosPenn)'; 
+    AMuscForce(:,time_instant) = (fl.*fv.*Fmax.*cosPenn)'; 
+    PMuscForce(:,time_instant) = (Fmax.*fp.*cosPenn)'; 
     
     % create a struct containing relevant information to be passed to the
     % function simulating the accelerations and reaction forces and moments
     % induced in the model
     params.model = model_temp;
     params.state = state;    
-    params.AMuscForce = AMuscForce;
-    params.PMuscForce = PMuscForce;
+    params.AMuscForce = AMuscForce(:,time_instant);
+    params.PMuscForce = PMuscForce(:,time_instant);
     params.coords = coords; % G: this is empty.. should it be empty?
     params.coordNames = coordNames;
     params.acts = acts;
@@ -570,6 +577,10 @@ name_file = append('muscle_activations_', experiment_name);
 muscleNames = ArrayStr();
 muscles.getNames(muscleNames);
 
+%setting to have (timesteps x number of muscles)
+AMuscForce = AMuscForce.';
+PMuscForce = PMuscForce.';
+
 muscle_order = "";
 for i = 1:numMuscles
     muscle_order= [muscle_order, string(muscleNames.get(i-1).toCharArray')];
@@ -584,7 +595,7 @@ muscle_order = muscle_order(2:end);
 % rescale the frequency of the solution knowing the freq of the data
 frequency_solution = frequency_trc_data/time_interval;
 
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim', 'AMuscForce', 'PMuscForce', 'MuscVelocity');
 
 file_results = append(saving_path,'\', name_file, '.mat');
 
@@ -607,26 +618,28 @@ if print_flag
        hold off
     end
     legend("muscle activation")
-    f1.WindowState = 'maximized';
-    name_fig1 = append(experiment_name, '_MuscleActivations.png');
+    %f1.WindowState = 'maximized';
+    name_fig1 = append(experiment_name, '_MuscleActivations.fig');
     saveas(f1, name_fig1)
+    close
 
 
-    % % Plot reserve actuator excitations.
-    % f2 = figure;
-    % title("Reserve actuators")
-    % side = ceil(sqrt(numCoordActs));
-    % for i = 1:numCoordActs
-    %     subplot(side,side,i)
-    %     hold on
-    %     plot(pgc, xsol(:,numMuscles+i), 'linewidth', 2);
-    %     title(char(acts{numMuscles+i}));
-    %     hold off
-    % end
-    % legend("reserve act value")
-    % f2.WindowState = 'maximized';
-    % name_fig2 = append(experiment_name, '_ReserveActuators.png');
-    % saveas(f2, name_fig2)
+    % Plot reserve actuator excitations.
+    f2 = figure;
+    title("Reserve actuators")
+    side = ceil(sqrt(numCoordActs));
+    for i = 1:numCoordActs
+        subplot(side,side,i)
+        hold on
+        plot(pgc, xsol(:,numMuscles+i), 'linewidth', 2);
+        title(char(acts{numMuscles+i}));
+        hold off
+    end
+    legend("reserve act value")
+    %f2.WindowState = 'maximized';
+    name_fig2 = append(experiment_name, '_ReserveActuators.fig');
+    saveas(f2, name_fig2)
+    close
 
     % plot accelerations
     f3 = figure;
@@ -644,9 +657,10 @@ if print_flag
         hold off
     end
     legend("measured", "simulated")
-    f3.WindowState = 'maximized';
-    name_fig3 = append(experiment_name, '_AccelerationsMatching.png');
+    %f3.WindowState = 'maximized';
+    name_fig3 = append(experiment_name, '_AccelerationsMatching.fig');
     saveas(f3, name_fig3)
+    close
 
     % plot the constraint violation on the accelerations per coordinate
     violation = abs(accelerations-simulatedAccelerations);
@@ -667,9 +681,10 @@ if print_flag
         hold off
     end
     legend("acc violation")
-    f4.WindowState = 'maximized';
-    name_fig4 = append(experiment_name, '_AccViolation.png');
+    %f4.WindowState = 'maximized';
+    name_fig4 = append(experiment_name, '_AccViolation.fig');
     saveas(f4, name_fig4)
+    close
 
     % plot the constraint violation per timestep
     violation_t = sum(violation, 2);
@@ -682,30 +697,31 @@ if print_flag
     grid on
     title("Cumulative constraint violation per time-step")
     hold off
-    f5.WindowState = 'maximized';
-    name_fig5 = append(experiment_name, '_CumulativeAccViolation.png');
+    %f5.WindowState = 'maximized';
+    name_fig5 = append(experiment_name, '_CumulativeAccViolation.fig');
     saveas(f5, name_fig5)
+    close
 
-    % plot the position of the GH force on the glenoid
-    radius = sind(maxAngle);
-    p=nsidedpoly(1000, 'Center', [0,0], 'Radius', radius);
-    c = linspace(0,timesExp(end),length(norm_fv_rotated));
-    f6 = figure;
-    hold on
-    plot(p, 'FaceColor', 'r')
-    for time_instant=1:numTimePoints
-        scatter(-norm_fv_rotated(time_instant,3), -norm_fv_rotated(time_instant,1), [], c(time_instant), 'filled')
-    end
-    hcb = colorbar;
-    h = gca;
-    set(h, "XTickLabel", [])
-    set(h, "YTickLabel", [])
-    xlabel("back                                                                       front")   % corresponding roughly to OpenSim X axis (horizontal pointing forward)
-    ylabel("down                                                                       up")      % corresponding to OpenSim Y axis (vertical pointing upwards)
-    colorTitleHandle = get(hcb,'Title');
-    titleString = 'time [s]';
-    set(colorTitleHandle ,'String',titleString);
-    hold off
-    name_fig6 = append(experiment_name, '_CoPGH.png');
-    saveas(f6, name_fig6)
+    % % plot the position of the GH force on the glenoid
+    % radius = sind(maxAngle);
+    % p=nsidedpoly(1000, 'Center', [0,0], 'Radius', radius);
+    % c = linspace(0,timesExp(end),length(norm_fv_rotated));
+    % f6 = figure;
+    % hold on
+    % plot(p, 'FaceColor', 'r')
+    % for time_instant=1:numTimePoints
+    %     scatter(-norm_fv_rotated(time_instant,3), -norm_fv_rotated(time_instant,1), [], c(time_instant), 'filled')
+    % end
+    % hcb = colorbar;
+    % h = gca;
+    % set(h, "XTickLabel", [])
+    % set(h, "YTickLabel", [])
+    % xlabel("back                                                                       front")   % corresponding roughly to OpenSim X axis (horizontal pointing forward)
+    % ylabel("down                                                                       up")      % corresponding to OpenSim Y axis (vertical pointing upwards)
+    % colorTitleHandle = get(hcb,'Title');
+    % titleString = 'time [s]';
+    % set(colorTitleHandle ,'String',titleString);
+    % hold off
+    % name_fig6 = append(experiment_name, '_CoPGH.png');
+    % saveas(f6, name_fig6)
 end

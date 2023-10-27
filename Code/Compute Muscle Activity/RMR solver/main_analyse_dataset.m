@@ -61,7 +61,7 @@ weigth_wing = 0.0001;
 weight_coord = [weight_abd, weight_elev, weight_up_rot, weigth_wing];
 
 % Downsampling
-time_interval = 1;
+time_interval = 10;
 
 % Flags (Select whether to enforce constraints)
 dynamic_bounds = true;              % enforcing continuity of the activations from one timestep to the next, to respect first-order dynamics
