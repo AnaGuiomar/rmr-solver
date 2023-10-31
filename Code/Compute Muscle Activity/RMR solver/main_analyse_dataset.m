@@ -23,8 +23,11 @@ path_to_repo = pwd;
 addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
+%choose participant
+participant = 'UEFS07';
+
 %path to OpenSim folder
-path_to_opensim = '/Users/guiomarsantoscarvalho/OpenSim/Thesis/UEFS25/';
+path_to_opensim = ['/Users/guiomarsantoscarvalho/OpenSim/Thesis/', participant,'/'];
 
 % where you have the experimental files (.trc)
 trc_path = fullfile(path_to_opensim, 'TRC');
@@ -34,7 +37,7 @@ saving_path = fullfile(path_to_opensim, 'RMR');
 
 
 % Select model
-modelFile = append(path_to_opensim, 'TSM_UEFS25_scaled.osim');
+modelFile = append(path_to_opensim, 'TSM_', participant,'_scaled.osim');
 model = Model(modelFile);
 
 
@@ -59,7 +62,7 @@ weigth_wing = 0.0001;
 weight_coord = [weight_abd, weight_elev, weight_up_rot, weigth_wing];
 
 % Downsampling
-time_interval = 10;
+time_interval = 1;
 
 % Flags (Select whether to enforce constraints)
 dynamic_bounds = true;              % enforcing continuity of the activations from one timestep to the next, to respect first-order dynamics
@@ -81,7 +84,7 @@ if apply_external_force
                                                     % so you will have to modify it too
 
     external_force_filename = append(path_to_opensim, '/ExternalLoads/Treadmill_ExternalForces_45W.xml');             % name of the filename in which the force is going to be stored
-    external_force_storagefile = append(path_to_opensim, '/ExternalLoads/UEFS25_ExpTrial_2_4kmh_45W_ExternalForce.sto');
+    external_force_storagefile = append(path_to_opensim, '/ExternalLoads/', participant,'_ExpTrial_2_4kmh_45W_ExternalForce.sto');
     % 3D components of the force (fictitious for now, you can subsitute
     % this with experimental data)
     % Values are in Newton 
@@ -126,7 +129,7 @@ for trc_file_index=1:num_files
         has_2kg_weight = str2num(experiment(end-5));      % based on file name
     end
     
-[aux_optimization_status, aux_unfeasibility_flags, tOptim(trc_file_index), aux_result_file] = RMR_analysis(dataset_considered, model, experiment, 0, weight_coord, time_interval, dynamic_bounds, enforce_GH_constraint, force_params, saving_path);
+[aux_optimization_status, aux_unfeasibility_flags, tOptim(trc_file_index), aux_result_file] = RMR_analysis(participant, model, experiment, 0, weight_coord, time_interval, dynamic_bounds, enforce_GH_constraint, force_params, saving_path);
 
     optimizationStatus(trc_file_index).experiment = aux_optimization_status;
     result_file_RMR{trc_file_index} = aux_result_file;

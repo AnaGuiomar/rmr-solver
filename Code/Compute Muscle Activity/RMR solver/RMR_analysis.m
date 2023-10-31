@@ -78,7 +78,7 @@ addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 %path to OpenSim folder
-path_to_opensim = '/Users/guiomarsantoscarvalho/OpenSim/Thesis/UEFS25/';
+path_to_opensim = ['/Users/guiomarsantoscarvalho/OpenSim/Thesis/',subject_considered,'/'];
 
 % cd to Personal Results to have all the results saved there
 cd([path_to_opensim, 'RMR']);
@@ -358,7 +358,10 @@ fl = zeros(1, numMuscles);
 fv = zeros(1, numMuscles);
 fp = zeros(1, numMuscles);
 cosPenn = zeros(1, numMuscles);
-MuscVelocity = zeros(1,numMuscles); %ADDED
+MuscVelocity = zeros(numMuscles,numTimePoints);                  %ADDED
+MuscPower = zeros(numMuscles,numTimePoints);                     %ADDED
+AMuscForce = zeros(numMuscles,numTimePoints);        %ADDED
+PMuscForce = zeros(numMuscles,numTimePoints);        %ADDED
 Fmax = zeros(1, numMuscles);
 A_eq_acc = zeros(numCoords,num_acts);
 A_eq_force = zeros(3, num_acts);
@@ -388,9 +391,6 @@ end
 
 tic
 
-%allocate the
-AMuscForce = zeros(numMuscles,numTimePoints);
-PMuscForce = zeros(numMuscles,numTimePoints);
 
 % enter in the optimization loop
 for time_instant = 1:numTimePoints
@@ -424,14 +424,14 @@ for time_instant = 1:numTimePoints
     modelControls = model_temp.getControls(state);
 
     % Populate the muscle multiplier arrays. To do this, we must have realized 
-    % the system to the velocity stage
-    %get velocity in this loop
+    % the system to the velocity stage & get muscle velocity and power 
     for index_muscle = 1:numMuscles
         fl(index_muscle) = muscles_downcasted{index_muscle}.getActiveForceLengthMultiplier(state);            
         fv(index_muscle) = muscles_downcasted{index_muscle}.getForceVelocityMultiplier(state);
         fp(index_muscle) = muscles_downcasted{index_muscle}.getPassiveForceMultiplier(state);
         cosPenn(index_muscle) = muscles_downcasted{index_muscle}.getCosPennationAngle(state);
-        MuscVelocity(index_muscle) = muscles_downcasted{index_muscle}.getFiberVelocity(state);
+        MuscVelocity(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getFiberVelocity(state);
+        MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);
     end 
 
     % get the vector Vec_H2GC between humeral head and the glenoid center
@@ -579,7 +579,9 @@ muscles.getNames(muscleNames);
 
 %setting to have (timesteps x number of muscles)
 AMuscForce = AMuscForce.';
-PMuscForce = PMuscForce.';
+PMuscForce = PMuscForce.'; 
+MuscPower = MuscPower.';
+MuscVelocity = MuscVelocity.';
 
 muscle_order = "";
 for i = 1:numMuscles
@@ -595,9 +597,9 @@ muscle_order = muscle_order(2:end);
 % rescale the frequency of the solution knowing the freq of the data
 frequency_solution = frequency_trc_data/time_interval;
 
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim', 'AMuscForce', 'PMuscForce', 'MuscVelocity');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim', 'AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower');
 
-file_results = append(saving_path,'\', name_file, '.mat');
+file_results = append(saving_path,'/', name_file, '.mat');
 
 %% Plot results
 %According to the value of the 'print_flag'
