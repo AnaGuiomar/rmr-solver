@@ -221,12 +221,20 @@ muscles_downcasted = cell(numMuscles,1);
 muscleNames = cell(numMuscles,1);
 
 % save here downcasted muscles to a list 
-for index_muscle = 1:numMuscles
-   % Downcast base muscle to Millard2012EquilibriumMuscle
-   muscles_downcasted(index_muscle) = Millard2012EquilibriumMuscle.safeDownCast(muscles.get(index_muscle-1));
-   muscleNames{index_muscle} = char(muscles_downcasted{index_muscle});
-   muscles_downcasted{index_muscle}.set_ignore_tendon_compliance(true);  % not really relevant as actuation will be overwritten
-   muscles_downcasted{index_muscle}.set_ignore_activation_dynamics(true);
+if strcmpi(muscles.get(0).getConcreteClassName(), 'Thelen2003Muscle')
+    for index_muscle = 1:numMuscles
+       % Downcast base muscle to Thelen2003Muscle
+       muscles_downcasted(index_muscle) = Thelen2003Muscle.safeDownCast(muscles.get(index_muscle-1));
+       muscleNames{index_muscle} = char(muscles_downcasted{index_muscle});
+    end
+else   
+    for index_muscle = 1:numMuscles
+       % Downcast base muscle to Millard2012EquilibriumMuscle
+       muscles_downcasted(index_muscle) = Millard2012EquilibriumMuscle.safeDownCast(muscles.get(index_muscle-1));
+       muscleNames{index_muscle} = char(muscles_downcasted{index_muscle});
+       muscles_downcasted{index_muscle}.set_ignore_tendon_compliance(true);  % not really relevant as actuation will be overwritten
+       muscles_downcasted{index_muscle}.set_ignore_activation_dynamics(true);
+    end
 end
 
 if (withviz == true)
@@ -235,70 +243,32 @@ end
 
 %% Add external force
 if force_params.apply_external_force
-    % this part requires to be rewritten to account for the custom external
-    % force that the user wants to apply
-%     samples_EF = 0
-%     point_of_application = force_params.EF_point_of_application;
-    file_name = force_params.EF_filename;
-    storage_file = force_params.EF_storage_file;
-
-%     % TODO: add here the identifier that you are willing to use, and specify
-%     % the body and the location in which the force is applied
-%     if strcmp(point_of_application, 'your_identifier')
-%         body = 'hand';                    % for a pushing task (like wheelchair) probably the force should be applied at the hand
-%         marker_location = [0.0 0.0 0.0];  % To be modified with the correct position of the marker in the body frame                                   
-%     end
-% 
-%     % create the storage file in which the force value are saved
-%     storage_file = append(force_params.EF_filename, '.mot');
-% 
-%     % here we are setting the moments to be all 0. In case this is not the
-%     % case, they should be set here too (last 3 columns of the matrix)
-%     force_moments_matrix = zeros(samples_EF, 6);
-% 
-%     force_moments_matrix(1:numel(force_vector_x),1) = force_vector_x;       % force along x axis    
-%     force_moments_matrix(1:numel(force_vector_y),2) = force_vector_y;       % force along y axis
-%     force_moments_matrix(1:numel(force_vector_z),3) = force_vector_z;       % force along z axis
-% 
-%     % The marker position is kept fixed, as it is defined in the body frame
-%     force_point = repmat(marker_location, [samples_EF,1]);
-%     
-%     data = [time, force_moments_matrix, force_point];
-%     
-%     % create  the motion file to be used in the ExternalLoads .xml file
-%     columnNames = ["F_x" "F_y" "F_z" "M_x" "M_y" "M_z" "p_x" "p_y" "p_z"];
-%     
-%     writeMotStoData(data, 1, columnNames, file_name);
-%     
-%     mot_file_name = append(file_name, '.mot');
-%     
-%     % creating storage object
-    force_storage = Storage(storage_file, false);
-%     force_storage.setName(mot_file_name(1:end-4));
-%     force_storage.print(mot_file_name);
-%     
-%     % Create external force object
-    external_force = ExternalForce();
-    external_force.setName('ExternalForce');
-    external_force.set_applied_to_body('hand');
-    external_force.set_force_expressed_in_body("ground");       % TODO: here it depends from the coordinate frame in which the force is expressed
-    external_force.set_point_expressed_in_body('ground');
-    external_force.set_force_identifier('ground_force_v');
-    external_force.set_point_identifier('ground_force_p');
-%     external_force.set_torque_identifier('M_');
-    external_force.set_data_source_name('UEFS25_ExpTrial_2_4kmh_45W_ExternalForce');         % CHANGE WITH NEW SUBJECT OR TASK! this line and the next "link" the storage file to the external force
-    external_force.setDataSource(force_storage);    
-%     
-    xml_file_name = append(file_name);
-    external_force.print(xml_file_name);                        % print the xml file where the ExternalForce is defined
-
-    % add the force to the model (it is added as the last element of the
-    % force set)
-    model_temp.addForce(external_force); % changed from model to model_temp
+    % get how many forces we need to apply
+   num_forces = force_params.num_forces;
+   for force_index = 1:num_forces
+       % this part requires to be rewritten to account for the custom external
+        % force that the user wants to apply
+        file_name = force_params.forces{force_index}.ef_filename;
+        storage_file = force_params.forces{force_index}.ef_storage;
+        external_force = force_params.forces{force_index}.ef; 
     
-    % ensure that the force is correctly integrated in teh model
+        % add the force to the model (it is added as the last element of the
+        % force set)
+        model_temp.addForce(external_force);
+   end
+   % ensure that the force is correctly integrated in teh model
     model_temp.finalizeConnections();
 end
+     % Create external force object
+    % external_force = ExternalForce();
+    % external_force.setName('ExternalForce');
+    % external_force.set_applied_to_body('hand');
+    % external_force.set_force_expressed_in_body('ground');   
+    % external_force.set_point_expressed_in_body('ground');
+    % external_force.set_force_identifier('ground_force_v');
+    % external_force.set_point_identifier('ground_force_p');
+    % external_force.set_data_source_name(append(subject_considered ,'_ExpTrial_2_4kmh_45W_ExternalForce.sto'));         % CHANGE WITH NEW SUBJECT OR TASK! this line and the next "link" the storage file to the external force
+    % external_force.setDataSource(force_storage);    
 
 % Update the system to include any muscle modeling changes
 state = model_temp.initSystem();
@@ -313,6 +283,7 @@ for i = 1:num_acts
     acts(i) = ScalarActuator.safeDownCast(allActs.get(i-1));
     if i<=numMuscles
         acts{i}.overrideActuation(state, true);
+        acts{i}.computeEquilibrium(state);
     end
 end
 
@@ -350,7 +321,7 @@ x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)]; %[ones(1,numMuscles)]; %, epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)];  % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -391,7 +362,6 @@ end
 
 tic
 
-
 % enter in the optimization loop
 for time_instant = 1:numTimePoints
     if print_flag
@@ -417,6 +387,12 @@ for time_instant = 1:numTimePoints
 
     % realize the system to the velocity stage
     model_temp.realizeVelocity(state);
+
+    % set the muscle fiber to be the optimal one, to hopefully help
+    % convergence of the equilibrateMuscle() method
+    for index_muscle = 1:numMuscles
+        muscles_downcasted{index_muscle}.setFiberLength(state, muscles_downcasted{index_muscle}.get_optimal_fiber_length)
+    end
     
     % equilibrate the muscles to make them start in the correct state
     model_temp.equilibrateMuscles(state);
