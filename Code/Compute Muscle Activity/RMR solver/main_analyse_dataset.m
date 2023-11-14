@@ -49,11 +49,11 @@ motion_file = fullfile([path_to_opensim, '/ScalingResults/Corrected Markers/'] ,
 % motion_file = 0; % No motionfile
 
 % Downsampling
-time_interval = 15;
+time_interval = 30;
 
 % Flags (Select whether to enforce constraints)
 dynamic_bounds = true;               % enforcing continuity of the activations from one timestep to the next, to respect first-order dynamics
-enforce_GH_constraint = false;       % enforcing directional constraint on the glenohumeral joint force
+enforce_GH_constraint = true;       % enforcing directional constraint on the glenohumeral joint force
 apply_external_force = 1;
 
 %Check if 3 extra markers were added to the model (G_center,HH_center,G_edge)

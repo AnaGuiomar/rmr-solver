@@ -179,8 +179,8 @@ timeRange = [start_time end_time];
 % get the coordinates from the output of the IK in rad for the rotational
 % joints
 [coordinates, coordNames, timesExp] = loadFilterCropArray(motion_file_name, lowpassFreq, timeRange);
-coordinates = coordinates(:, 1:7);
-coordNames = coordNames(1:7);
+% coordinates = coordinates(:, 1:7);
+% coordNames = coordNames(1:7);
 
 coordinates(:, 1) = deg2rad(coordinates(:, 1));
 coordinates(:, 4:end) = deg2rad(coordinates(:, 4:end));
@@ -203,7 +203,7 @@ accNames = speedNames;
 % visually check the values of joint states, speeds and accelerations
 if print_flag
     figure
-    for i=1:size(coordNames,1)
+    for i=1:16%size(coordNames,1)
     subplot(4,4,i)
     hold on
     plot(coordinates(:,i))
@@ -315,7 +315,7 @@ x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,3), 10*ones(1,3)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -526,7 +526,7 @@ end
 tOptim = toc;
 
 %% SAVING THE RESULTS TO FILE
-name_file = append('muscle_activations_', subject_considered, '_', experiment_name);
+name_file = append('muscle_activations_', experiment_name);
 
 muscleNames = ArrayStr();
 muscles.getNames(muscleNames);
@@ -592,7 +592,7 @@ if print_flag
     end
     legend("reserve act value")
     %f2.WindowState = 'maximized';
-    name_fig2 = append(experiment_name, '_ReserveActuators.png');
+    name_fig2 = append(experiment_name, '_ReserveActuators.fig');
     saveas(f2, name_fig2)
     close
 
@@ -613,7 +613,7 @@ if print_flag
     end
     legend("measured", "simulated")
     %f3.WindowState = 'maximized';
-    name_fig3 = append(experiment_name, '_AccelerationsMatching.png');
+    name_fig3 = append(experiment_name, '_AccelerationsMatching.fig');
     saveas(f3, name_fig3)
     close
 
@@ -636,9 +636,10 @@ if print_flag
         hold off
     end
     legend("acc violation")
-    f4.WindowState = 'maximized';
-    name_fig4 = append(experiment_name, '_AccViolation.png');
+    %f4.WindowState = 'maximized';
+    name_fig4 = append(experiment_name, '_AccViolation.fig');
     saveas(f4, name_fig4)
+    close
 
     % plot the constraint violation per timestep
     violation_t = sum(violation, 2);
@@ -652,7 +653,7 @@ if print_flag
     title("Cumulative constraint violation per time-step")
     hold off
     % f5.WindowState = 'maximized';
-    name_fig5 = append(experiment_name, '_CumulativeAccViolation.png');
+    name_fig5 = append(experiment_name, '_CumulativeAccViolation.fig');
     saveas(f5, name_fig5)
     close
 

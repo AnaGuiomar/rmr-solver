@@ -86,11 +86,12 @@ for j = 1:length(coordNames)
     simulatedAccelerations(j) = coord.getAccelerationValue(state);
 end
 
-if jointToConstrain
+if isempty(jointToConstrain)
+    force = [];
+    moment = [];
+else
     % get moment and force at the required joint
     moment = jointToConstrain.calcReactionOnParentExpressedInGround(state).get(0).getAsMat();
     force = jointToConstrain.calcReactionOnParentExpressedInGround(state).get(1).getAsMat();
-else
-    force = [];
-    moment = [];
+    
 end
