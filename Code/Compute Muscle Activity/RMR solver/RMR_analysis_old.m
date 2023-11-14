@@ -1,4 +1,4 @@
-function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_JRC_enforced, force_params, saving_path)
+function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_GH_enforced, force_params, saving_path)
 % Rapid Muscle Redundancy (RMR) solver, leveraging OpenSim API.
 % Starting from experimental marker data (in .trc format) the optimal
 % muscle activations are found that can reproduce the motion, solving:
@@ -37,8 +37,8 @@ function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_a
 % *dynamic_activation_bounds : flag to indicate whether dynamic bounds must
 %                              be used to limit the activation values during 
 %                              RMR solution
-% * flag_JRC_enforced: true or false, if a joint reaction constraint is
-%                      considered or not
+% * flag_GH_enforced: true or false, if glenohumeral constraint is
+%                     considered or not -> joint reaction contstraint
 % * force_params: parameters of the external force(s) applied
 % * saving_path: path to where the results of the redundancy solver are
 %                saved
@@ -62,7 +62,7 @@ import org.opensim.modeling.*;
 %% General settings
 % if these are set to true, results are printed but the code will be slower
 print_flag = true;         
-withviz = true;
+withviz = false;
 
 %% Set the correct paths
 % set the path current folder to be the one where this script is contained
@@ -86,7 +86,7 @@ cd([path_to_opensim, 'RMR']);
 % create a temporary copy of the model, to be used in the function. In this
 % way, the model can be modified freely here without interfering with its
 % state/properties outside this function
-model_temp = model_original.clone();    
+model_temp = model_original.clone();      
 
 %% Getting quantities about GlenoHumeral joint
 % get the glenohumeral joint
@@ -179,11 +179,8 @@ timeRange = [start_time end_time];
 % get the coordinates from the output of the IK in rad for the rotational
 % joints
 [coordinates, coordNames, timesExp] = loadFilterCropArray(motion_file_name, lowpassFreq, timeRange);
-coordinates = coordinates(:, 1:7);
-coordNames = coordNames(1:7);
-
-coordinates(:, 1) = deg2rad(coordinates(:, 1));
-coordinates(:, 4:end) = deg2rad(coordinates(:, 4:end));
+coordinates(:, 1:3) = deg2rad(coordinates(:, 1:3));
+coordinates(:, 7:end) = deg2rad(coordinates(:, 7:end));
 
 % get the velocities for each joint in rad/s
 time_step_data = timesExp(2)-timesExp(1);
@@ -203,7 +200,7 @@ accNames = speedNames;
 % visually check the values of joint states, speeds and accelerations
 if print_flag
     figure
-    for i=1:size(coordNames,1)
+    for i=1:16
     subplot(4,4,i)
     hold on
     plot(coordinates(:,i))
@@ -214,6 +211,7 @@ if print_flag
     grid on
     end
     legend("coords", "speeds", "accs")
+    close
 end
 
 %% Store max isometric force values and disable muscle dynamics
@@ -245,11 +243,10 @@ end
 
 %% Add external force
 if force_params.apply_external_force
-    % get how many forces we need to apply
-    num_forces = force_params.num_forces;
-
-    for force_index = 1:num_forces
-        % this part requires to be rewritten to account for the custom external
+   % get how many forces we need to apply
+   num_forces = force_params.num_forces;
+   for force_index = 1:num_forces
+       % this part requires to be rewritten to account for the custom external
         % force that the user wants to apply
         file_name = force_params.forces{force_index}.ef_filename;
         storage_file = force_params.forces{force_index}.ef_storage;
@@ -258,9 +255,8 @@ if force_params.apply_external_force
         % add the force to the model (it is added as the last element of the
         % force set)
         model_temp.addForce(external_force);
-    end
-
-    % ensure that the force is correctly integrated in teh model
+   end
+   % ensure that the force is correctly integrated in teh model
     model_temp.finalizeConnections();
 end
 
@@ -315,7 +311,7 @@ x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,3), 10*ones(1,3)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,9)];  % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -323,6 +319,10 @@ fl = zeros(1, numMuscles);
 fv = zeros(1, numMuscles);
 fp = zeros(1, numMuscles);
 cosPenn = zeros(1, numMuscles);
+MuscVelocity = zeros(numMuscles,numTimePoints);                  %ADDED
+MuscPower = zeros(numMuscles,numTimePoints);                     %ADDED
+AMuscForce = zeros(numMuscles,numTimePoints);        %ADDED
+PMuscForce = zeros(numMuscles,numTimePoints);        %ADDED
 Fmax = zeros(1, numMuscles);
 A_eq_acc = zeros(numCoords,num_acts);
 A_eq_force = zeros(3, num_acts);
@@ -332,10 +332,6 @@ optimizationStatus = cell(numTimePoints,1);
 norm_fv_in_ground = zeros(numTimePoints, 3);
 norm_fv_rotated = zeros(numTimePoints, 3);
 rel_angle = zeros(numTimePoints,1);
-MuscVelocity = zeros(numMuscles,numTimePoints);                  %ADDED
-MuscPower = zeros(numMuscles,numTimePoints);                     %ADDED
-AMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
-PMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 
 % get model quantities we still need
 coords = model_temp.getCoordinateSet();
@@ -381,27 +377,27 @@ for time_instant = 1:numTimePoints
 
     % realize the system to the velocity stage
     model_temp.realizeVelocity(state);
-    
+
     % set the muscle fiber to be the optimal one, to hopefully help
     % convergence of the equilibrateMuscle() method
     for index_muscle = 1:numMuscles
         muscles_downcasted{index_muscle}.setFiberLength(state, muscles_downcasted{index_muscle}.get_optimal_fiber_length)
     end
-
+    
     % equilibrate the muscles to make them start in the correct state
     model_temp.equilibrateMuscles(state);
     
     modelControls = model_temp.getControls(state);
 
     % Populate the muscle multiplier arrays. To do this, we must have realized 
-    % the system to the velocity stage
+    % the system to the velocity stage & get muscle velocity and power 
     for index_muscle = 1:numMuscles
         fl(index_muscle) = muscles_downcasted{index_muscle}.getActiveForceLengthMultiplier(state);            
         fv(index_muscle) = muscles_downcasted{index_muscle}.getForceVelocityMultiplier(state);
         fp(index_muscle) = muscles_downcasted{index_muscle}.getPassiveForceMultiplier(state);
         cosPenn(index_muscle) = muscles_downcasted{index_muscle}.getCosPennationAngle(state);
-        MuscVelocity(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getFiberVelocity(state);     %ADDED
-        MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);          %ADDED
+        MuscVelocity(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getFiberVelocity(state);
+        MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);
     end 
 
     % get the vector Vec_H2GC between humeral head and the glenoid center
@@ -410,17 +406,17 @@ for time_instant = 1:numTimePoints
     
     % store the values of active and passive maximum force in the current
     % configuration
-    AMuscForce = (fl.*fv.*Fmax.*cosPenn)'; 
-    PMuscForce = (Fmax.*fp.*cosPenn)'; 
+    AMuscForce(:,time_instant) = (fl.*fv.*Fmax.*cosPenn)'; 
+    PMuscForce(:,time_instant) = (Fmax.*fp.*cosPenn)'; 
     
     % create a struct containing relevant information to be passed to the
     % function simulating the accelerations and reaction forces and moments
     % induced in the model
     params.model = model_temp;
     params.state = state;    
-    params.AMuscForce = AMuscForce;
-    params.PMuscForce = PMuscForce;
-    params.coords = coords;
+    params.AMuscForce = AMuscForce(:,time_instant);
+    params.PMuscForce = PMuscForce(:,time_instant);
+    params.coords = coords; % G: this is empty.. should it be empty?
     params.coordNames = coordNames;
     params.acts = acts;
     params.muscles = muscles;
@@ -428,7 +424,6 @@ for time_instant = 1:numTimePoints
     params.useMuscles = 1;
     params.useControls = 1;
     params.modelControls = modelControls;
-    % params.joint_to_constrain = [];
     params.joint_to_constrain = glen;
 
     q_ddot_0 = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
@@ -443,7 +438,7 @@ for time_instant = 1:numTimePoints
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
     % Call FMINCON to solve the problem
-    if flag_JRC_enforced
+    if flag_GH_enforced
         [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
         if exitflag ==0
             % call the solver again, starting from current x, in case the maximum iterations are exceeded
@@ -494,7 +489,7 @@ for time_instant = 1:numTimePoints
         % Retrieve the optimal accelerations
         simulatedAccelerations(time_instant,:) = findInducedAccelerationsForceMoments(x,params);
         
-        if flag_JRC_enforced
+        if flag_GH_enforced
             % retrieve the position of the joint reaction force on the approximated
             % glenoid computing the reaction force vector at the given joint
             % The force is expressed in the ground frame
@@ -525,11 +520,17 @@ end
 
 tOptim = toc;
 
-%% SAVING THE RESULTS TO FILE
-name_file = append('muscle_activations_', subject_considered, '_', experiment_name);
+%% SAVING THE RESULTS TO FILE (before plotting)
+name_file = append('muscle_activations_', experiment_name);
 
 muscleNames = ArrayStr();
 muscles.getNames(muscleNames);
+
+%setting to have (timesteps x number of muscles)
+AMuscForce = AMuscForce.';
+PMuscForce = PMuscForce.'; 
+MuscPower = MuscPower.';
+MuscVelocity = MuscVelocity.';
 
 muscle_order = "";
 for i = 1:numMuscles
@@ -545,18 +546,12 @@ muscle_order = muscle_order(2:end);
 % rescale the frequency of the solution knowing the freq of the data
 frequency_solution = frequency_trc_data/time_interval;
 
-%setting to have (timesteps x number of muscles)
-AMuscForce = AMuscForce.';
-PMuscForce = PMuscForce.'; 
-MuscPower = MuscPower.';
-MuscVelocity = MuscVelocity.';
-
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim', 'AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower');
 
 file_results = append(saving_path,'/', name_file, '.mat');
 
 %% Plot results
-% According to the value of the 'print_flag'
+%According to the value of the 'print_flag'
 if print_flag
     % plot muscle activations
     f1 = figure;
@@ -578,7 +573,8 @@ if print_flag
     name_fig1 = append(experiment_name, '_MuscleActivations.fig');
     saveas(f1, name_fig1)
     close
-    
+
+
     % Plot reserve actuator excitations.
     f2 = figure;
     title("Reserve actuators")
@@ -592,7 +588,7 @@ if print_flag
     end
     legend("reserve act value")
     %f2.WindowState = 'maximized';
-    name_fig2 = append(experiment_name, '_ReserveActuators.png');
+    name_fig2 = append(experiment_name, '_ReserveActuators.fig');
     saveas(f2, name_fig2)
     close
 
@@ -613,7 +609,7 @@ if print_flag
     end
     legend("measured", "simulated")
     %f3.WindowState = 'maximized';
-    name_fig3 = append(experiment_name, '_AccelerationsMatching.png');
+    name_fig3 = append(experiment_name, '_AccelerationsMatching.fig');
     saveas(f3, name_fig3)
     close
 
@@ -636,9 +632,10 @@ if print_flag
         hold off
     end
     legend("acc violation")
-    f4.WindowState = 'maximized';
-    name_fig4 = append(experiment_name, '_AccViolation.png');
+    %f4.WindowState = 'maximized';
+    name_fig4 = append(experiment_name, '_AccViolation.fig');
     saveas(f4, name_fig4)
+    close
 
     % plot the constraint violation per timestep
     violation_t = sum(violation, 2);
@@ -651,33 +648,31 @@ if print_flag
     grid on
     title("Cumulative constraint violation per time-step")
     hold off
-    % f5.WindowState = 'maximized';
-    name_fig5 = append(experiment_name, '_CumulativeAccViolation.png');
+    %f5.WindowState = 'maximized';
+    name_fig5 = append(experiment_name, '_CumulativeAccViolation.fig');
     saveas(f5, name_fig5)
     close
 
-    % % plot the position of the center of pressure of the joint reaction force
-    % if flag_JRC_enforced
-    %     radius = sind(maxAngle);
-    %     p=nsidedpoly(1000, 'Center', [0,0], 'Radius', radius);
-    %     c = linspace(0,timesExp(end),length(norm_fv_rotated));
-    %     f6 = figure;
-    %     hold on
-    %     plot(p, 'FaceColor', 'r')
-    %     for time_instant=1:numTimePoints
-    %         scatter(-norm_fv_rotated(time_instant,3), -norm_fv_rotated(time_instant,1), [], c(time_instant), 'filled')
-    %     end
-    %     hcb = colorbar;
-    %     h = gca;
-    %     set(h, "XTickLabel", [])
-    %     set(h, "YTickLabel", [])
-    %     xlabel("back                                                                       front")   % corresponding roughly to OpenSim X axis (horizontal pointing forward)
-    %     ylabel("down                                                                       up")      % corresponding to OpenSim Y axis (vertical pointing upwards)
-    %     colorTitleHandle = get(hcb,'Title');
-    %     titleString = 'time [s]';
-    %     set(colorTitleHandle ,'String',titleString);
-    %     hold off
-    %     name_fig6 = append(experiment_name, '_CoPGH.png');
-    %     saveas(f6, name_fig6)
-    end
+    % % plot the position of the GH force on the glenoid
+    % radius = sind(maxAngle);
+    % p=nsidedpoly(1000, 'Center', [0,0], 'Radius', radius);
+    % c = linspace(0,timesExp(end),length(norm_fv_rotated));
+    % f6 = figure;
+    % hold on
+    % plot(p, 'FaceColor', 'r')
+    % for time_instant=1:numTimePoints
+    %     scatter(-norm_fv_rotated(time_instant,3), -norm_fv_rotated(time_instant,1), [], c(time_instant), 'filled')
+    % end
+    % hcb = colorbar;
+    % h = gca;
+    % set(h, "XTickLabel", [])
+    % set(h, "YTickLabel", [])
+    % xlabel("back                                                                       front")   % corresponding roughly to OpenSim X axis (horizontal pointing forward)
+    % ylabel("down                                                                       up")      % corresponding to OpenSim Y axis (vertical pointing upwards)
+    % colorTitleHandle = get(hcb,'Title');
+    % titleString = 'time [s]';
+    % set(colorTitleHandle ,'String',titleString);
+    % hold off
+    % name_fig6 = append(experiment_name, '_CoPGH.png');
+    % saveas(f6, name_fig6)
 end
