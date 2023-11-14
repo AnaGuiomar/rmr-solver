@@ -431,13 +431,23 @@ for time_instant = 1:numTimePoints
     % params.joint_to_constrain = [];
     params.joint_to_constrain = glen;
 
-    q_ddot_0 = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
-    delQ_delX = eye(num_acts);
+    % q_ddot_0 = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
+    % delQ_delX = eye(num_acts);
+    % 
+    % for k = 1:num_acts
+    %     [incrementalForceAccel_k, ~, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
+    %     kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
+    %     A_eq_acc(:,k) = kthColumn_A_eq_acc;
+    % end
 
+    [q_ddot_0, F_r0, ~] = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
+    delQ_delX = eye(num_acts);
     for k = 1:num_acts
-        [incrementalForceAccel_k, ~, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
+        [incrementalForceAccel_k, F_rk, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
         kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
         A_eq_acc(:,k) = kthColumn_A_eq_acc;
+        kthColumn_A_eq_force =  F_rk - F_r0;
+        A_eq_force(:,k) = kthColumn_A_eq_force;
     end
 
     Beq = accelerations(time_instant,:)' - q_ddot_0;
