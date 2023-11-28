@@ -614,7 +614,7 @@ if print_flag
         subplot(side,side,i)
         hold on
         plot(accelerations(:, i), 'linewidth', 1.5);
-        plot(simulatedAccelerations(:, i), 'linewidth', 1.5);
+        plot(simulatedAccelerations(:, i), 'linewidth', 1);
         xlabel("samples")
         ylabel("[]/s^2")
         grid on

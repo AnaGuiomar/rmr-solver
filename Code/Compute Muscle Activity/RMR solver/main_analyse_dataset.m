@@ -24,7 +24,7 @@ addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 %choose participant & Trial
-participant = 'UEFS10';
+participant = 'UEFS25';
 dataset_considered = 'Trial2_45W';
 
 %path to OpenSim folder
@@ -36,17 +36,17 @@ model = Model(modelFile);
 
 % where you have the experimental files (.trc)
 trc_path = fullfile(path_to_opensim, 'TRC');
-[files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
-experiment = append(path,files);
-% experiment = 0;         %No TRC file
+% [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
+% experiment = append(path,files);
+experiment = 0;         %No TRC file
 
 % where to save the results
 saving_path = fullfile(path_to_opensim, 'RMR');
 
 % get the motion file from Scaling 
 % motion_file = fullfile([path_to_opensim, '/ScalingResults/Corrected Markers/'] , [participant, '_Trial2_45W_IK_fitted_corrected.mot']);
-% motion_file = fullfile(saving_path , 'IK_UEFS08_ExpTrial_2_4kmh_45W.mot');
-motion_file = 0; % No motionfile
+motion_file = fullfile(path_to_opensim, 'IK', 'IK_ExpTrial_2_4kmh_45W.mot');
+% motion_file = 0; % No motionfile
 
 % Downsampling
 time_interval = 1;
@@ -75,18 +75,19 @@ force_params.apply_external_force = apply_external_force;
 force_1 = [];
 % Create an empty torque identifier
 torque_identifier = '';
+ground_force_p = ' ';
 
 if apply_external_force
 
     external_force_filename = 'ExternalForces_Trial2_45W.xml';             % name of the filename in which the force is going to be stored
     
     % Create Storage object
-    output_file_path = fullfile(path_to_opensim, 'ExternalLoads', [participant '_ExpTrial_2_4kmh_45W_ExternalForce.sto']);
+    output_file_path = fullfile(path_to_opensim, 'ExternalLoads', [participant '_ExpTrial_2_4kmh_45W_ExternalForce_filt.sto']);
     data_storage = Storage(output_file_path);
-    data_storage.setName([participant '_ExpTrial_2_4kmh_45W_ExternalForce.sto']);
+    data_storage.setName([participant '_ExpTrial_2_4kmh_45W_ExternalForce_filt.sto']);
     
     % Create ExternalForce object
-    external_force = ExternalForce(data_storage, "ground_force_v", "ground_force_p", torque_identifier, "hand", "ground", "ground");
+    external_force = ExternalForce(data_storage, "ground_force_v", ground_force_p, torque_identifier, "hand", "ground", "ground");
     external_force.print(fullfile(path_to_opensim, 'ExternalLoads', external_force_filename));
 
     % Save external force parameters in structure
