@@ -62,7 +62,7 @@ import org.opensim.modeling.*;
 %% General settings
 % if these are set to true, results are printed but the code will be slower
 print_flag = true;         
-withviz = true;
+withviz = false;
 
 %% Set the correct paths
 % set the path current folder to be the one where this script is contained
@@ -622,7 +622,7 @@ if print_flag
         hold off
     end
     legend("measured", "simulated")
-    %f3.WindowState = 'maximized';
+    f3.WindowState = 'maximized';
     name_fig3 = append(experiment_name, '_AccelerationsMatching.fig');
     saveas(f3, name_fig3)
     close
