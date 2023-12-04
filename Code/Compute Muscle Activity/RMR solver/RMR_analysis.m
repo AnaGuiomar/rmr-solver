@@ -179,11 +179,10 @@ timeRange = [start_time end_time];
 % get the coordinates from the output of the IK in rad for the rotational
 % joints
 [coordinates, coordNames, timesExp] = loadFilterCropArray(motion_file_name, lowpassFreq, timeRange);
-% coordinates = coordinates(:, 1:7);
-% coordNames = coordNames(1:7);
-
-coordinates(:, 1) = deg2rad(coordinates(:, 1));
-coordinates(:, 4:end) = deg2rad(coordinates(:, 4:end));
+% coordinates(:, 1) = deg2rad(coordinates(:, 1));
+% coordinates(:, 4:end) = deg2rad(coordinates(:, 4:end));
+coordinates(:, 1:3) = deg2rad(coordinates(:, 1:3));
+coordinates(:, 7:end) = deg2rad(coordinates(:, 7:end));
 
 % get the velocities for each joint in rad/s
 time_step_data = timesExp(2)-timesExp(1);
@@ -277,7 +276,7 @@ for i = 1:num_acts
     acts(i) = ScalarActuator.safeDownCast(allActs.get(i-1));
     if i<=numMuscles
         acts{i}.overrideActuation(state, true);
-        acts{i}.computeEquilibrium(state);
+        % acts{i}.computeEquilibrium(state);
     end
 end
 
@@ -382,11 +381,11 @@ for time_instant = 1:numTimePoints
     % realize the system to the velocity stage
     model_temp.realizeVelocity(state);
     
-    % set the muscle fiber to be the optimal one, to hopefully help
-    % convergence of the equilibrateMuscle() method
-    for index_muscle = 1:numMuscles
-        muscles_downcasted{index_muscle}.setFiberLength(state, muscles_downcasted{index_muscle}.get_optimal_fiber_length)
-    end
+    % % set the muscle fiber to be the optimal one, to hopefully help
+    % % convergence of the equilibrateMuscle() method
+    % for index_muscle = 1:numMuscles
+    %     muscles_downcasted{index_muscle}.setFiberLength(state, muscles_downcasted{index_muscle}.get_optimal_fiber_length)
+    % end
 
     % equilibrate the muscles to make them start in the correct state
     model_temp.equilibrateMuscles(state);
@@ -431,17 +430,9 @@ for time_instant = 1:numTimePoints
     % params.joint_to_constrain = [];
     params.joint_to_constrain = glen;
 
-    % q_ddot_0 = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
-    % delQ_delX = eye(num_acts);
-    % 
-    % for k = 1:num_acts
-    %     [incrementalForceAccel_k, ~, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
-    %     kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
-    %     A_eq_acc(:,k) = kthColumn_A_eq_acc;
-    % end
-
     [q_ddot_0, F_r0, ~] = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
     delQ_delX = eye(num_acts);
+    
     for k = 1:num_acts
         [incrementalForceAccel_k, F_rk, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
         kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
