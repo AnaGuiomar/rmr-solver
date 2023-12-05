@@ -36,17 +36,17 @@ model = Model(modelFile);
 
 % where you have the experimental files (.trc)
 trc_path = fullfile(path_to_opensim, 'TRC');
-[files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
-experiment = append(path,files);
-% experiment = 0;         %No TRC file
+% [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
+% experiment = append(path,files);
+experiment = 0;         %No TRC file
 
 % where to save the results
 saving_path = fullfile(path_to_opensim, 'RMR');
 
 % get the motion file from Scaling 
-% motion_file = fullfile([path_to_opensim, '/ScalingResults/Corrected Markers/'] , [participant, '_Trial2_45W_IK_fitted_corrected.mot']);
+motion_file = fullfile([path_to_opensim, '/RMR/'] , ['IK_', participant, '_ExpTrial_2_4kmh_45W.mot']);
 % motion_file = fullfile(path_to_opensim, 'IK', 'IK_ExpTrial_2_4kmh_45W.mot');
-motion_file = 0; % No motionfile
+% motion_file = 0; % No motionfile
 
 % Downsampling
 time_interval = 15;

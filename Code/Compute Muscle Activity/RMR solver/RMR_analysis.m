@@ -137,7 +137,7 @@ if trc_file
     ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
     ikTool.setStartTime(start_time);
-    ikTool.setEndTime(end_time);
+    ikTool.setEndTime(end_time); %CHANGEEEE only considers 1 sec
     ikTool.setModel(model_temp);
     
     % set the reference values for the scapula coordinates (last 4 tasks)
@@ -179,10 +179,12 @@ timeRange = [start_time end_time];
 % get the coordinates from the output of the IK in rad for the rotational
 % joints
 [coordinates, coordNames, timesExp] = loadFilterCropArray(motion_file_name, lowpassFreq, timeRange);
-% coordinates(:, 1) = deg2rad(coordinates(:, 1));
-% coordinates(:, 4:end) = deg2rad(coordinates(:, 4:end));
 coordinates(:, 1:3) = deg2rad(coordinates(:, 1:3));
 coordinates(:, 7:end) = deg2rad(coordinates(:, 7:end));
+
+%Do not use clavicle coordinates for acc matching in the optimization
+% coordNames = coordNames([1:6,9:end], 1);  
+% coordinates = coordinates(:,[1:6,9:end]);
 
 % get the velocities for each joint in rad/s
 time_step_data = timesExp(2)-timesExp(1);
@@ -297,7 +299,7 @@ unfeasibility_flags = zeros(size(numTimePoints));
 
 % Create the FMINCON options structure.
 options = optimoptions('fmincon','Display','none', ...
-     'TolCon',1e-2,'TolFun',1e-3,'TolX',1e-3,'MaxFunEvals',100000, ...
+     'TolCon',1e-3,'TolFun',1e-3,'TolX',1e-3,'MaxFunEvals',100000, ...
      'MaxIter',10000,'Algorithm','sqp', 'StepTolerance', 1e-8); %, 'DiffMinChange', 1.0e-2);
  
 % Construct initial guess and bounds arrays
@@ -309,7 +311,8 @@ t_deact = 0.04;         % deactivation time constant
 
 lb = [zeros(1,numMuscles), -k*ones(1,numCoordActs)];
 ub = [ones(1,numMuscles), k*ones(1,numCoordActs)];
-x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
+x_zero = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
+x0 = x_zero;                                              %set initial guess to 0 (for fmincon)
 
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
@@ -443,17 +446,35 @@ for time_instant = 1:numTimePoints
 
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
+    % Use results from previous optimum found as start guess for current.
+    % If no optimum was found in the previous step -> x0 = 0.
+    % if time_instant > 1 
+    % elseif ~isnan(xsol(time_instant-1, 1))
+    %     x0 = xsol(time_instant-1, :);
+    % else
+    %     x0 = x_zero;
+    % end
+
+    if time_instant > 1
+       if  isnan(xsol(time_instant-1, 1))
+           x0 = x_zero;
+       else
+           x0 = xsol(time_instant-1, :);
+       end
+    end
+
+
+
     % Call FMINCON to solve the problem
     if flag_JRC_enforced
         [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
-        if exitflag ==0
+        if exitflag == 0
             % call the solver again, starting from current x, in case the maximum iterations are exceeded
             [x,~,exitflag,output] = fmincon(cost, x, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
         end
-        if exitflag<0 && time_instant>1
-            % call the solver again, starting from previous optimum found,
-            % in case optimization gets stuck in local minimum 
-            [x,~,exitflag,output] = fmincon(cost, xsol(time_instant-1, :), [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
+        % if no solution was found by optimizer -> xsol = NaN
+        if exitflag < 1 %&& time_instant > 1
+            x = NaN(1,length(x));
         end
     else
         [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, [], options);
@@ -482,45 +503,47 @@ for time_instant = 1:numTimePoints
     % Store solution
     xsol(time_instant, :) = x;
 
-    % dynamically update the upper and lower bounds for the activations
-    if dynamic_activation_bounds
-        for k = 1:numMuscles
-            lb(k) = max(x(k) - x(k) * (0.5 + 1.5 * x(k)) * time_step_RMR /t_deact, 0);
-            ub(k) = min (x(k) + (1-x(k)) * time_step_RMR / (t_act * (0.5 + 1.5*x(k))), 1);
+    if ~isnan(x(1,1))
+        % dynamically update the upper and lower bounds for the activations
+        if dynamic_activation_bounds
+            for k = 1:numMuscles
+                lb(k) = max(x(k) - x(k) * (0.5 + 1.5 * x(k)) * time_step_RMR /t_deact, 0);
+                ub(k) = min (x(k) + (1-x(k)) * time_step_RMR / (t_act * (0.5 + 1.5*x(k))), 1);
+            end
         end
-    end
-
-    % if we want to print suff, we need to compute it now
-    if print_flag
-        % Retrieve the optimal accelerations
-        simulatedAccelerations(time_instant,:) = findInducedAccelerationsForceMoments(x,params);
-        
-        if flag_JRC_enforced
-            % retrieve the position of the joint reaction force on the approximated
-            % glenoid computing the reaction force vector at the given joint
-            % The force is expressed in the ground frame
-            force_vec = A_eq_force * xsol(time_instant, :)' + F_r0;
+    
+        % if we want to print suff, we need to compute it now
+        if print_flag
+            % Retrieve the optimal accelerations
+            simulatedAccelerations(time_instant,:) = findInducedAccelerationsForceMoments(x,params);
             
-            % evaluate the relative angle between the reaction force and Vec_H2GC
-            cosTheta = max(min(dot(Vec_H2GC,force_vec)/(norm(Vec_H2GC)*norm(force_vec)),1),-1);
-            rel_angle(time_instant) = real(acosd(cosTheta));
-        
-            % evaluate the position on the glenoid where reaction force is exerted
-            norm_Vec_H2GC = Vec_H2GC/norm(Vec_H2GC);
-            norm_fv_in_ground(time_instant,:) = force_vec/norm(force_vec);
-        
-            beta_angle = atan(norm_Vec_H2GC(3)/norm_Vec_H2GC(1));
-            alpha_angle = atan(norm_Vec_H2GC(3)/(sin(beta_angle)*norm_Vec_H2GC(2)));
-        
-            Ry = [cos(beta_angle) 0 sin(beta_angle); 0 1 0; -sin(beta_angle) 0 cos(beta_angle)];
-            Rz = [cos(alpha_angle) -sin(alpha_angle) 0; sin(alpha_angle) cos(alpha_angle) 0; 0 0 1];
-        
-            norm_fv_rotated(time_instant,:) = Rz*Ry*norm_fv_in_ground(time_instant,:)';
+            if flag_JRC_enforced
+                % retrieve the position of the joint reaction force on the approximated
+                % glenoid computing the reaction force vector at the given joint
+                % The force is expressed in the ground frame
+                force_vec = A_eq_force * xsol(time_instant, :)' + F_r0;
+                
+                % evaluate the relative angle between the reaction force and Vec_H2GC
+                cosTheta = max(min(dot(Vec_H2GC,force_vec)/(norm(Vec_H2GC)*norm(force_vec)),1),-1);
+                rel_angle(time_instant) = real(acosd(cosTheta));
+            
+                % evaluate the position on the glenoid where reaction force is exerted
+                norm_Vec_H2GC = Vec_H2GC/norm(Vec_H2GC);
+                norm_fv_in_ground(time_instant,:) = force_vec/norm(force_vec);
+            
+                beta_angle = atan(norm_Vec_H2GC(3)/norm_Vec_H2GC(1));
+                alpha_angle = atan(norm_Vec_H2GC(3)/(sin(beta_angle)*norm_Vec_H2GC(2)));
+            
+                Ry = [cos(beta_angle) 0 sin(beta_angle); 0 1 0; -sin(beta_angle) 0 cos(beta_angle)];
+                Rz = [cos(alpha_angle) -sin(alpha_angle) 0; sin(alpha_angle) cos(alpha_angle) 0; 0 0 1];
+            
+                norm_fv_rotated(time_instant,:) = Rz*Ry*norm_fv_in_ground(time_instant,:)';
+            end
         end
-    end
-
-    if (withviz == true)
-        model_temp.getVisualizer.show(state);
+    
+        if (withviz == true)
+            model_temp.getVisualizer.show(state);
+        end
     end
 end
 
