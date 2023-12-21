@@ -24,7 +24,7 @@ addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 %choose participant & Trial
-participant = 'UEFS08';
+participant = 'UEFS12';
 dataset_considered = 'Trial2_45W';
 
 %path to OpenSim folder
@@ -36,20 +36,20 @@ model = Model(modelFile);
 
 % where you have the experimental files (.trc)
 trc_path = fullfile(path_to_opensim, 'TRC');
-% [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
-% experiment = append(path,files);
-experiment = 0;         %No TRC file
+[files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
+experiment = append(path,files);
+% experiment = 0;         %No TRC file
 
 % where to save the results
 saving_path = fullfile(path_to_opensim, 'RMR');
 
 % get the motion file from Scaling 
-motion_file = fullfile([path_to_opensim, '/RMR/'] , ['IK_', participant, '_ExpTrial_2_4kmh_45W.mot']);
+% motion_file = fullfile([path_to_opensim, '/RMR/'] , ['IK_', participant, '_ExpTrial_2_4kmh_45W.mot']);
 % motion_file = fullfile(path_to_opensim, 'IK', 'IK_ExpTrial_2_4kmh_45W.mot');
-% motion_file = 0; % No motionfile
+motion_file = 0; % No motionfile
 
 % Downsampling
-time_interval = 15;
+time_interval = 1;
 
 % Set the weight for the various scapula coordinates in IK
 % This is to achieve a good agreement between scapula upward rotation and

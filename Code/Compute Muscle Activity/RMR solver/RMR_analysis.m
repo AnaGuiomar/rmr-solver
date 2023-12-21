@@ -136,8 +136,8 @@ if trc_file
     ikTool.setMarkerDataFileName(trc_file);
     ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
-    ikTool.setStartTime(start_time);
-    ikTool.setEndTime(end_time); %CHANGEEEE only considers 1 sec
+    ikTool.setStartTime(15);
+    ikTool.setEndTime(17); %CHANGEEEE only considers 2 sec
     ikTool.setModel(model_temp);
     
     % set the reference values for the scapula coordinates (last 4 tasks)
@@ -296,11 +296,12 @@ speeds = speeds(1:time_interval:N, :);
 accelerations = accelerations(1:time_interval:N, :);
 numTimePoints = size(coordinates, 1);
 unfeasibility_flags = zeros(size(numTimePoints));
+exit2 = zeros(size(numTimePoints));
 
 % Create the FMINCON options structure.
 options = optimoptions('fmincon','Display','none', ...
-     'TolCon',1e-3,'TolFun',1e-3,'TolX',1e-3,'MaxFunEvals',100000, ...
-     'MaxIter',10000,'Algorithm','sqp', 'StepTolerance', 1e-8); %, 'DiffMinChange', 1.0e-2);
+     'TolCon',1e-3,'TolFun',1e-3,'TolX',1e-2,'MaxFunEvals',100000, ...
+     'MaxIter',10000,'Algorithm','sqp', 'StepTolerance', 1e-10); %, 'DiffMinChange', 1.0e-2);
  
 % Construct initial guess and bounds arrays
 numCoords = length(coordNames);
@@ -338,6 +339,7 @@ MuscVelocity = zeros(numMuscles,numTimePoints);                  %ADDED
 MuscPower = zeros(numMuscles,numTimePoints);                     %ADDED
 AMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 PMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
+ExternalForces = zeros(numTimePoints,3);                         %ADDED
 
 % get model quantities we still need
 coords = model_temp.getCoordinateSet();
@@ -433,11 +435,11 @@ for time_instant = 1:numTimePoints
     % params.joint_to_constrain = [];
     params.joint_to_constrain = glen;
 
-    [q_ddot_0, F_r0, ~] = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
+    [q_ddot_0, F_r0, ~, externalForceValues] = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
     delQ_delX = eye(num_acts);
     
     for k = 1:num_acts
-        [incrementalForceAccel_k, F_rk, ~] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
+        [incrementalForceAccel_k, F_rk, ~, externalForceValues] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
         kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
         A_eq_acc(:,k) = kthColumn_A_eq_acc;
         kthColumn_A_eq_force =  F_rk - F_r0;
@@ -446,24 +448,44 @@ for time_instant = 1:numTimePoints
 
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
-    % Use results from previous optimum found as start guess for current.
-    % If no optimum was found in the previous step -> x0 = 0.
-    % if time_instant > 1 
-    % elseif ~isnan(xsol(time_instant-1, 1))
-    %     x0 = xsol(time_instant-1, :);
+    % Store values of the external force excerted
+    ExternalForces(time_instant,:) = externalForceValues;
+
+    % % Use results from previous optimum found as start guess for current.
+    % % If no optimum was found in the previous step -> x0 = 0
+    % if time_instant > 1
+    %    if  isnan(xsol(time_instant-1, 1))
+    %        x0 = x_zero;
+    %    else
+    %        x0 = xsol(time_instant-1, :);
+    %    end
+    % end
+    % 
+    % % Call FMINCON to solve the problem
+    % if flag_JRC_enforced
+    %     [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
+    %     if exitflag == 0
+    %         % call the solver again, starting from current x, in case the maximum iterations are exceeded
+    %         [x,~,exitflag,output] = fmincon(cost, x, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
+    %     end
+    %     % if no solution was found by optimizer -> xsol = NaN
+    %     if exitflag < 0 %&& time_instant > 1
+    %         x = NaN(1,length(x));
+    %     end
     % else
-    %     x0 = x_zero;
+    %     [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, [], options);
+    %     if exitflag ==0
+    %         % call the solver again, starting from current x, in case the maximum iterations are exceeded
+    %         [x,~,exitflag,output] = fmincon(cost, x, [], [], A_eq_acc, Beq, lb, ub, [], options);
+    %     end
+    %     if exitflag<0 && time_instant>1
+    %         % call the solver again, starting from previous optimum found,
+    %         % in case optimization gets stuck in local minimum 
+    %         [x,~,exitflag,output] = fmincon(cost, xsol(time_instant-1, :), [], [], A_eq_acc, Beq, lb, ub, [], options);
+    %     end
     % end
 
-    if time_instant > 1
-       if  isnan(xsol(time_instant-1, 1))
-           x0 = x_zero;
-       else
-           x0 = xsol(time_instant-1, :);
-       end
-    end
-
-
+    x0 = x_zero;
 
     % Call FMINCON to solve the problem
     if flag_JRC_enforced
@@ -472,8 +494,15 @@ for time_instant = 1:numTimePoints
             % call the solver again, starting from current x, in case the maximum iterations are exceeded
             [x,~,exitflag,output] = fmincon(cost, x, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
         end
+        if exitflag<0 && time_instant>1
+            if  ~isnan(xsol(time_instant-1, 1))
+            % call the solver again, starting from previous optimum found,
+            % in case optimization gets stuck in local minimum 
+            [x,~,exitflag,output] = fmincon(cost, xsol(time_instant-1, :), [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
+            end
+        end
         % if no solution was found by optimizer -> xsol = NaN
-        if exitflag < 1 %&& time_instant > 1
+        if exitflag < 0 %&& time_instant > 1
             x = NaN(1,length(x));
         end
     else
@@ -491,8 +520,12 @@ for time_instant = 1:numTimePoints
 
     optimizationStatus{time_instant} = output;
 
-    if exitflag<0
+    if exitflag<1 % was 0 before
         unfeasibility_flags(time_instant) = 1;
+    end
+
+    if exitflag==2
+        exit2(time_instant) = 1;
     end
 
     % get best feasible point, if different from what returned by fmincon
@@ -548,36 +581,6 @@ for time_instant = 1:numTimePoints
 end
 
 tOptim = toc;
-
-%% SAVING THE RESULTS TO FILE
-name_file = append('muscle_activations_', experiment_name);
-
-muscleNames = ArrayStr();
-muscles.getNames(muscleNames);
-
-muscle_order = "";
-for i = 1:numMuscles
-    muscle_order= [muscle_order, string(muscleNames.get(i-1).toCharArray')];
-end
-
-for i=1:length(coordNames)
-    muscle_order= [muscle_order, string(coordNames{i})];
-end
-
-muscle_order = muscle_order(2:end);
-
-% rescale the frequency of the solution knowing the freq of the data
-frequency_solution = frequency_trc_data/time_interval;
-
-%setting to have (timesteps x number of muscles)
-AMuscForce = AMuscForce.';
-PMuscForce = PMuscForce.'; 
-MuscPower = MuscPower.';
-MuscVelocity = MuscVelocity.';
-
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower');
-
-file_results = append(saving_path,'/', name_file, '.mat');
 
 %% Plot results
 % According to the value of the 'print_flag'
@@ -644,10 +647,6 @@ if print_flag
     % plot the constraint violation on the accelerations per coordinate
     violation = abs(accelerations-simulatedAccelerations);
 
-     if strcmpi(experiment_name(1:5), 'shrug')
-        violation(:,[13,15]) = 0;
-     end
-
     f4 = figure;
     for i = 1:length(coordNames)
         subplot(side,side,i)
@@ -704,5 +703,35 @@ if print_flag
     %     hold off
     %     name_fig6 = append(experiment_name, '_CoPGH.png');
     %     saveas(f6, name_fig6)
-    end
+end
+
+%% SAVING THE RESULTS TO FILE
+name_file = append('muscle_activations_', experiment_name);
+
+muscleNames = ArrayStr();
+muscles.getNames(muscleNames);
+
+muscle_order = "";
+for i = 1:numMuscles
+    muscle_order= [muscle_order, string(muscleNames.get(i-1).toCharArray')];
+end
+
+for i=1:length(coordNames)
+    muscle_order= [muscle_order, string(coordNames{i})];
+end
+
+muscle_order = muscle_order(2:end);
+
+% rescale the frequency of the solution knowing the freq of the data
+frequency_solution = frequency_trc_data/time_interval;
+
+%setting to have (timesteps x number of muscles)
+AMuscForce = AMuscForce.';
+PMuscForce = PMuscForce.'; 
+MuscPower = MuscPower.';
+MuscVelocity = MuscVelocity.';
+
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2');
+
+file_results = append(saving_path,'/', name_file, '.mat');
 end

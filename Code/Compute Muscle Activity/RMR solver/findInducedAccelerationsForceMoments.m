@@ -1,4 +1,4 @@
-function [simulatedAccelerations, force, moment] = findInducedAccelerationsForceMoments(x,params)
+function [simulatedAccelerations, force, moment, forceValues] = findInducedAccelerationsForceMoments(x,params)
 % This function returns the simulated accelerations for each coordinate of
 % a Model, given the model state and the forces exerted by the Muscles (and
 % CoorindateActuators). It also returns the joint reaction force and moment 
@@ -78,6 +78,16 @@ end
 
 % Realize the model to the acceleration stage
 model.realizeAcceleration(state);
+
+%get ExternalForce -> last in the ForceSet
+forces = model.getForceSet();
+numForces = forces.getSize();
+extforce = forces.get(numForces-1);
+forceVal = extforce.getRecordValues(state);
+%convert doubles Array -> doubles
+forceValues(1,1) = forceVal.get(0);
+forceValues(1,2) = forceVal.get(1);
+forceValues(1,3) = forceVal.get(2);
 
 % retrieve the simulated accelerations for each coordinate
 simulatedAccelerations = zeros(length(coordNames),1);
