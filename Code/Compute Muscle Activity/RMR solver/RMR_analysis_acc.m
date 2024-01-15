@@ -1,4 +1,4 @@
-function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_JRC_enforced, force_params, saving_path)
+function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis_acc(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_JRC_enforced, force_params, saving_path)
 % Rapid Muscle Redundancy (RMR) solver, leveraging OpenSim API.
 % Starting from experimental marker data (in .trc format) the optimal
 % muscle activations are found that can reproduce the motion, solving:
@@ -136,8 +136,8 @@ if trc_file
     ikTool.setMarkerDataFileName(trc_file);
     ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
-    ikTool.setStartTime(start_time);
-    ikTool.setEndTime(end_time); %CHANGEEEE only considers 2 sec
+    ikTool.setStartTime(15);
+    ikTool.setEndTime(17); %CHANGEEEE only considers 2 sec
     ikTool.setModel(model_temp);
     
     % set the reference values for the scapula coordinates (last 4 tasks)
@@ -336,7 +336,7 @@ norm_fv_in_ground = zeros(numTimePoints, 3);
 norm_fv_rotated = zeros(numTimePoints, 3);
 rel_angle = zeros(numTimePoints,1);
 MuscVelocity = zeros(numMuscles,numTimePoints);                  %ADDED
-MuscPower = zeros(numTimePoints,numMuscles);                     %ADDED
+MuscPower = zeros(numMuscles,numTimePoints);                     %ADDED
 AMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 PMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 ExternalForces = zeros(numTimePoints,3);                         %ADDED
@@ -399,7 +399,7 @@ for time_instant = 1:numTimePoints
         fp(index_muscle) = muscles_downcasted{index_muscle}.getPassiveForceMultiplier(state);
         cosPenn(index_muscle) = muscles_downcasted{index_muscle}.getCosPennationAngle(state);
         MuscVelocity(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getFiberVelocity(state);     %ADDED
-        %MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);          %ADDED
+        MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);          %ADDED
     end 
 
     % get the vector Vec_H2GC between humeral head and the glenoid center
@@ -432,29 +432,29 @@ for time_instant = 1:numTimePoints
     [q_ddot_0, F_r0, ~, externalForceValues] = findInducedAccelerationsForceMoments(zeros(1,num_acts), params);
     delQ_delX = eye(num_acts);
      
-    for k = 1:num_acts
-        [incrementalForceAccel_k, F_rk, ~, externalForceValues] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
-        kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
-        A_eq_acc(:,k) = kthColumn_A_eq_acc;
-        kthColumn_A_eq_force =  F_rk - F_r0;
-        A_eq_force(:,k) = kthColumn_A_eq_force;
-    end
-
-    % % I THINK: enforcing simulated acceleration to match the experimental 
     % for k = 1:num_acts
     %     [incrementalForceAccel_k, F_rk, ~, externalForceValues] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
-    %     kthColumn_A_eq_acc = zeros(numCoords,1);
-    %     for c = 1:numCoords
-    %         if c == 7 || c == 8
-    %             kthColumn_A_eq_acc(c,1) =  incrementalForceAccel_k(c,1);
-    %         else
-    %             kthColumn_A_eq_acc(c,1) =  incrementalForceAccel_k(c,1) - q_ddot_0(c,1);
-    %         end
-    %     end
+    %     kthColumn_A_eq_acc =  incrementalForceAccel_k - q_ddot_0;
     %     A_eq_acc(:,k) = kthColumn_A_eq_acc;
     %     kthColumn_A_eq_force =  F_rk - F_r0;
     %     A_eq_force(:,k) = kthColumn_A_eq_force;
     % end
+
+    % I THINK: enforcing simulated acceleration to match the experimental 
+    for k = 1:num_acts
+        [incrementalForceAccel_k, F_rk, ~, externalForceValues] = findInducedAccelerationsForceMoments(delQ_delX(k,:),params);
+        kthColumn_A_eq_acc = zeros(numCoords,1);
+        for c = 1:numCoords
+            if c == 7 || c == 8
+                kthColumn_A_eq_acc(c,1) =  incrementalForceAccel_k(c,1);
+            else
+                kthColumn_A_eq_acc(c,1) =  incrementalForceAccel_k(c,1) - q_ddot_0(c,1);
+            end
+        end
+        A_eq_acc(:,k) = kthColumn_A_eq_acc;
+        kthColumn_A_eq_force =  F_rk - F_r0;
+        A_eq_force(:,k) = kthColumn_A_eq_force;
+    end
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
     % Store values of the external force excerted
@@ -544,20 +544,6 @@ for time_instant = 1:numTimePoints
     
     % Store solution
     xsol(time_instant, :) = x;
-
-    % Retrieve muscle power -> Otherwise using passive power 
-    % Set specific muscle activations
-    for index_muscle = 1:length(muscleNames)
-        muscle = model_temp.getMuscles.get(muscleNames{index_muscle});
-        muscle.setActivation(state,x(index_muscle));
-    end
-   
-    model_temp.realizeDynamics(state); % Realize dynamics (update model dynamics)
-    
-    % Retrieve muscle power
-    for i = 0:numMuscles - 1
-        MuscPower(time_instant,i+1) = muscles.get(i).getMusclePower(state);
-    end
 
     if ~isnan(x(1,1))
         % dynamically update the upper and lower bounds for the activations
@@ -751,9 +737,10 @@ frequency_solution = frequency_trc_data/time_interval;
 %setting to have (timesteps x number of muscles)
 AMuscForce = AMuscForce.';
 PMuscForce = PMuscForce.'; 
+MuscPower = MuscPower.';
 MuscVelocity = MuscVelocity.';
 
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2', 'violation_t');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2');
 
 file_results = append(saving_path,'/', name_file, '.mat');
 end
