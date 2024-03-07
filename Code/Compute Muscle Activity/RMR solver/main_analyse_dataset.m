@@ -38,10 +38,10 @@ model = Model(modelFile);
 trc_path = fullfile(path_to_opensim, 'TRC');
 [files,path] = uigetfile('*.trc', 'Select the .trc files to analyse', trc_path, 'MultiSelect','on');
 experiment = append(path,files);
-% experiment = 0;         %No TRC file
+% experiment = 0;         %No TRC file c
 
 % where to save the results
-saving_path = fullfile(path_to_opensim, 'RMR');
+saving_path = fullfile(path_to_opensim, 'RMR/');
 
 % get the motion file from Scaling 
 % motion_file = fullfile([path_to_opensim, '/RMR/'] , ['IK_', participant, '_ExpTrial_2_4kmh_45W.mot']);

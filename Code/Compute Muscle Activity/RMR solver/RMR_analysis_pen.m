@@ -1,4 +1,4 @@
-function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_JRC_enforced, force_params, saving_path)
+function [optimizationStatus, unfeasibility_flags, tOptim, file_results] = RMR_analysis_pen(subject_considered, model_original, trc_file, motion_file, weight_coord, time_interval, dynamic_activation_bounds, flag_JRC_enforced, force_params, saving_path)
 % Rapid Muscle Redundancy (RMR) solver, leveraging OpenSim API.
 % Starting from experimental marker data (in .trc format) the optimal
 % muscle activations are found that can reproduce the motion, solving:
@@ -136,8 +136,8 @@ if trc_file
     ikTool.setMarkerDataFileName(trc_file);
     ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
-    ikTool.setStartTime(start_time);
-    ikTool.setEndTime(end_time); %CHANGEEEE only considers 2 sec
+    ikTool.setStartTime(start_time);%start_time
+    ikTool.setEndTime(end_time); %end_time
     ikTool.setModel(model_temp);
     
     % set the reference values for the scapula coordinates (last 4 tasks)
@@ -301,8 +301,8 @@ exit2 = zeros(size(numTimePoints));
 % Create the FMINCON options structure.
 options = optimoptions('fmincon','Display','none', ...
      'TolCon',1e-3,'TolFun',1e-3,'TolX',1e-2,'MaxFunEvals',100000, ...
-     'MaxIter',10000,'Algorithm','sqp', 'StepTolerance', 1e-10); %, 'DiffMinChange', 1.0e-2);
-%1e-4 
+     'MaxIter',10000,'Algorithm','sqp', 'StepTolerance', 1e-8); %, 'DiffMinChange', 1.0e-2);
+ 
 % Construct initial guess and bounds arrays
 numCoords = length(coordNames);
 numCoordActs = num_acts-numMuscles;
@@ -312,13 +312,13 @@ t_deact = 0.04;         % deactivation time constant
 
 lb = [zeros(1,numMuscles), -k*ones(1,numCoordActs)];
 ub = [ones(1,numMuscles), k*ones(1,numCoordActs)];
-x_zero = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
-x0 = x_zero;                                              %set initial guess to 0 (for fmincon)
+x0 = [0.1* ones(1,numMuscles), zeros(1,numCoordActs)];
 
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,6), 10, epsilon,10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+% the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,8), 10*ones(1,3), 30, 20, 10*ones(1,4)];   % penalty for 'scapula_abdution_actuator' (#47) increased, as it was using too msuch reserve actuators in the solution 
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -340,7 +340,6 @@ MuscPower = zeros(numTimePoints,numMuscles);                     %ADDED
 AMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 PMuscForce = zeros(numMuscles,numTimePoints);                    %ADDED
 ExternalForces = zeros(numTimePoints,3);                         %ADDED
-ActuatorPower = zeros(numTimePoints,length(accNames));           %ADDED
 
 % get model quantities we still need
 coords = model_temp.getCoordinateSet();
@@ -444,10 +443,11 @@ for time_instant = 1:numTimePoints
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
     % do not track the 'clav_prot' (7th) and the 'clav_elev' (8th) coordinates    
-    % A_eq_acc(7, :) = zeros(size(A_eq_acc(7, :)));
-    % A_eq_acc(8, :) = zeros(size(A_eq_acc(8, :)));
-    % Beq(7, :) = zeros(size(Beq(7, :)));
-    % Beq(8, :) = zeros(size(Beq(8, :)));
+    A_eq_acc(7, :) = zeros(size(A_eq_acc(7, :)));
+    A_eq_acc(8, :) = zeros(size(A_eq_acc(8, :)));
+    Beq(7, :) = zeros(size(Beq(7, :)));
+    Beq(8, :) = zeros(size(Beq(8, :)));
+    
 
     % Store values of the external force excerted
     ExternalForces(time_instant,:) = externalForceValues;
@@ -455,7 +455,7 @@ for time_instant = 1:numTimePoints
     % Call FMINCON to solve the problem
     if flag_JRC_enforced
         [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
-        if exitflag == 0
+        if exitflag == 0 %|| exitflag == 2
             % call the solver again, starting from current x, in case the maximum iterations are exceeded
             [x,~,exitflag,output] = fmincon(cost, x, [], [], A_eq_acc, Beq, lb, ub, @(x)jntrxncon_linForce(x, Vec_H2GC, maxAngle, A_eq_force, F_r0), options);
         end
@@ -468,7 +468,7 @@ for time_instant = 1:numTimePoints
         end
         % if no solution was found by optimizer -> xsol = NaN
         if exitflag < 0 %&& time_instant > 1
-           x = NaN(1,length(x));
+            x = NaN(1,length(x));
         end
     else
         [x,~,exitflag,output] = fmincon(cost, x0, [], [], A_eq_acc, Beq, lb, ub, [], options);
@@ -503,28 +503,16 @@ for time_instant = 1:numTimePoints
 
     % Retrieve muscle power -> Otherwise using passive power 
     % Set specific muscle activations
-    for index_muscle = 0:length(acts)-1
-        if index_muscle <= length(muscleNames)-1 %opensim indexing starts at 0
-            muscle = model_temp.getMuscles.get(index_muscle);
-            muscle.setActivation(state,x(index_muscle+1));
-        else
-            ScalarActuator.safeDownCast(allActs.get(index_muscle)).setControls(Vector(1, x(index_muscle+1)), modelControls);
-        end
+    for index_muscle = 1:length(muscleNames)
+        muscle = model_temp.getMuscles.get(muscleNames{index_muscle});
+        muscle.setActivation(state,x(index_muscle));
     end
-
-    model_temp.realizeVelocity(state);
-    model_temp.setControls(state, modelControls);
-
-    % model_temp.realizeDynamics(state); % Realize dynamics (update model dynamics)
+   
+    model_temp.realizeDynamics(state); % Realize dynamics (update model dynamics)
     
-    model_temp.realizeAcceleration(state)
-    
-    for i = 0:length(acts) - 1
-        if i > 34
-        ActuatorPower(time_instant,i-34) = allActs.get(i).getPower(state);
-        else
+    % Retrieve muscle power
+    for i = 0:numMuscles - 1
         MuscPower(time_instant,i+1) = muscles.get(i).getMusclePower(state);
-        end
     end
 
     if ~isnan(x(1,1))
@@ -721,11 +709,7 @@ AMuscForce = AMuscForce.';
 PMuscForce = PMuscForce.'; 
 MuscVelocity = MuscVelocity.';
 
-for i = 1:size(acts)
-actNames(i)=string(char(acts{i, 1}));
-end
-
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2', 'violation_t', 'ActuatorPower', 'actNames');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2', 'violation_t');
 
 file_results = append(saving_path,'/', name_file, '.mat');
 end
