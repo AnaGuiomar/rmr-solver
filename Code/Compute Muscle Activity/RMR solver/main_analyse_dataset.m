@@ -24,7 +24,7 @@ addpath(path_to_repo)
 addpath(fullfile(path_to_repo, 'Code/Data Processing/'))
 
 %choose participant & Trial
-participant = 'UEFS08';
+participant = 'UEFS10';
 dataset_considered = 'Trial2_45W';
 
 %path to OpenSim folder

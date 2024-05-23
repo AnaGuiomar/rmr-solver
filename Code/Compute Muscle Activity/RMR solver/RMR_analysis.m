@@ -137,7 +137,7 @@ if trc_file
     ikTool.setOutputMotionFileName([path_to_opensim, 'RMR/', motion_file_name]);
     ikTool.set_report_marker_locations(1);
     ikTool.setStartTime(start_time);
-    ikTool.setEndTime(end_time); %CHANGEEEE only considers 2 sec
+    ikTool.setEndTime(end_time); 
     ikTool.setModel(model_temp);
     
     % set the reference values for the scapula coordinates (last 4 tasks)
@@ -318,7 +318,7 @@ x0 = x_zero;                                              %set initial guess to 
 % We define the activation squared cost as a MATLAB anonymous function
 % It is model specific!
 epsilon = 0;
-w = [ones(1,numMuscles), epsilon*ones(1,6), 10, epsilon,10*ones(1,9)];     % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
+w = [ones(1,numMuscles), epsilon*ones(1,6),10,epsilon,10*ones(1,9)];      % the cost function is written such that it allows the use of coord acts for the underactuated coordinates
 cost =@(x) sum(w.*(x.^2));
 
 % Pre-allocate arrays to be filled in the optimization loop
@@ -400,7 +400,6 @@ for time_instant = 1:numTimePoints
         fp(index_muscle) = muscles_downcasted{index_muscle}.getPassiveForceMultiplier(state);
         cosPenn(index_muscle) = muscles_downcasted{index_muscle}.getCosPennationAngle(state);
         MuscVelocity(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getFiberVelocity(state);     %ADDED
-        %MuscPower(index_muscle,time_instant) = muscles_downcasted{index_muscle}.getMusclePower(state);          %ADDED
     end 
 
     % get the vector Vec_H2GC between humeral head and the glenoid center
@@ -444,12 +443,12 @@ for time_instant = 1:numTimePoints
     Beq = accelerations(time_instant,:)' - q_ddot_0;
 
     % do not track the 'clav_prot' (7th) and the 'clav_elev' (8th) coordinates    
-    % A_eq_acc(7, :) = zeros(size(A_eq_acc(7, :)));
-    % A_eq_acc(8, :) = zeros(size(A_eq_acc(8, :)));
-    % Beq(7, :) = zeros(size(Beq(7, :)));
-    % Beq(8, :) = zeros(size(Beq(8, :)));
+    A_eq_acc(7, :) = zeros(size(A_eq_acc(7, :)));
+    A_eq_acc(8, :) = zeros(size(A_eq_acc(8, :)));
+    Beq(7, :) = zeros(size(Beq(7, :)));
+    Beq(8, :) = zeros(size(Beq(8, :)));
 
-    % Store values of the external force excerted
+    % Store values of the excerted external force 
     ExternalForces(time_instant,:) = externalForceValues;
 
     % Call FMINCON to solve the problem
@@ -502,7 +501,7 @@ for time_instant = 1:numTimePoints
     xsol(time_instant, :) = x;
 
     % Retrieve muscle power -> Otherwise using passive power 
-    % Set specific muscle activations
+    %1.  Set specific muscle activations
     for index_muscle = 0:length(acts)-1
         if index_muscle <= length(muscleNames)-1 %opensim indexing starts at 0
             muscle = model_temp.getMuscles.get(index_muscle);
@@ -512,11 +511,12 @@ for time_instant = 1:numTimePoints
         end
     end
 
+    % 2. Realize dynamics (update model dynamics) -> realize accelerations
+    % otherwise the reserve actuators are not included
     model_temp.realizeVelocity(state);
     model_temp.setControls(state, modelControls);
 
-    % model_temp.realizeDynamics(state); % Realize dynamics (update model dynamics)
-    
+    % model_temp.realizeDynamics(state); 
     model_temp.realizeAcceleration(state)
     
     for i = 0:length(acts) - 1
@@ -725,7 +725,7 @@ for i = 1:size(acts)
 actNames(i)=string(char(acts{i, 1}));
 end
 
-save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2', 'violation_t', 'ActuatorPower', 'actNames');
+save(name_file, 'xsol', 'muscle_order', 'frequency_solution', 'optimizationStatus', 'unfeasibility_flags', 'tOptim','AMuscForce', 'PMuscForce', 'MuscVelocity', 'MuscPower', 'ExternalForces', 'exit2', 'violation_t', 'ActuatorPower', 'actNames', 'simulatedAccelerations', 'accelerations');
 
 file_results = append(saving_path,'/', name_file, '.mat');
 end
